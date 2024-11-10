@@ -1,0 +1,71 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "description": "Configure your gateway node",
+        "data": {
+          "host": "Host",
+          "port": "Port"
+        }
+      },
+      "reconfigure": {
+        "description": "Reconfigure your gateway node",
+        "data": {
+          "host": "Host",
+          "port": "Port"
+        }
+      },
+      "node": {
+        "description": "Configure which nodes should be imported",
+        "data": {
+          "node": "Add Node",
+          "add_another_node": "Add another Node"
+        }
+      }
+    },
+    "error": {
+      "connection": "Unable to connect to the device.",
+      "unknown": "Unknown error occurred."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "description": "Configure which nodes should be imported",
+        "data": {
+          "nodes": "Selected Nodes",
+          "node": "Add Node",
+          "add_another_node": "Add another Node"
+        }
+      }
+    },
+    "error": {
+      "connection": "Unable to connect to the device.",
+      "unknown": "Unknown error occurred."
+    }
+  },
+  "services": {
+    "send_text": {
+      "name": "Send Text",
+      "description": "Send text to node or channel",
+      "fields": {
+        "text": {
+          "name": "Text Message",
+          "description": "Message to send (max 200 bytes)"
+        },
+        "from": {
+          "name": "From",
+          "description": "Select the gateway node to send the message from. If not provided, the best gateway node is chosen automatically."
+        },
+        "to": {
+          "name": "To",
+          "description": "Can be a home assistant device, meshtastic node number or meshtastic user id"
+        },
+        "ack": {
+          "name": "Acknowledgement",
+          "description": "Request an acknowledgement"
+        }
+      }
+    }
+  }
+}

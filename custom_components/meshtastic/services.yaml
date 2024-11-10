@@ -1,0 +1,25 @@
+send_text:
+  fields:
+    from:
+      selector:
+        device:
+          filter:
+            integration: meshtastic
+          entity:
+            domain: meshtastic
+            device_class:
+              - gateway
+    text:
+      required: true
+      selector:
+        text:
+          multiline: true
+    to:
+      required: true
+      selector:
+        device:
+          integration: meshtastic
+    ack:
+      required: true
+      selector:
+        boolean:

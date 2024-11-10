@@ -1,0 +1,16 @@
+# https://www.home-assistant.io/integrations/default_config/
+#default_config:
+history:
+logbook:
+
+# https://www.home-assistant.io/integrations/homeassistant/
+homeassistant:
+  debug: true
+
+# https://www.home-assistant.io/integrations/logger/
+logger:
+  default: info
+  logs:
+    custom_components.meshtastic: debug
+
+automation: !include automations.yaml
