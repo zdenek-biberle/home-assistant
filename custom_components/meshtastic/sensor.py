@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import datetime
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
@@ -19,6 +20,7 @@ from homeassistant.const import (
     UnitOfElectricCurrent,
     UnitOfElectricPotential,
     UnitOfTime,
+    SIGNAL_STRENGTH_DECIBELS,
 )
 
 from . import LOGGER, helpers
@@ -33,11 +35,12 @@ if TYPE_CHECKING:
     from .data import MeshtasticConfigEntry
 
 
-def _build_sensors(nodes, coordinator):
+def _build_sensors(nodes, runtime_data):
     entities = []
-    entities += _build_device_sensors(nodes, coordinator)
-    entities += _build_local_stats_sensors(nodes, coordinator)
-    entities += _build_power_metrics_sensors(nodes, coordinator)
+    entities += _build_node_sensors(nodes, runtime_data)
+    entities += _build_device_sensors(nodes, runtime_data)
+    entities += _build_local_stats_sensors(nodes, runtime_data)
+    entities += _build_power_metrics_sensors(nodes, runtime_data)
     return entities
 
 
@@ -77,9 +80,126 @@ class MeshtasticSensor(MeshtasticNodeEntity, SensorEntity):
     def _async_update_attrs(self) -> None:
         LOGGER.debug("Updating sensor attributes: %s", self)
         self._attr_native_value = self.entity_description.value_fn(self)
+        self._attr_available = self._attr_native_value is not None
 
 
-def _build_device_sensors(nodes, coordinator):
+def _build_node_sensors(nodes, runtime_data):
+    entities = []
+    coordinator = runtime_data.coordinator
+
+    def last_heard(device):
+        last_heard_int = device.coordinator.data[device.node_id].get("lastHeard")
+        if last_heard_int is None:
+            return None
+        return datetime.datetime.fromtimestamp(last_heard_int, tz=datetime.UTC)
+
+    entities += [
+        MeshtasticSensor(
+            coordinator=coordinator,
+            entity_description=MeshtasticSensorEntityDescription(
+                key="node_last_heard",
+                name="Last Heard",
+                icon="mdi:timeline-clock",
+                device_class=SensorDeviceClass.TIMESTAMP,
+                value_fn=last_heard,
+            ),
+            node_id=node_id,
+        )
+        for node_id, node_info in nodes.items()
+        if node_id != runtime_data.gateway_node["num"]
+    ]
+
+    entities += [
+        MeshtasticSensor(
+            coordinator=coordinator,
+            entity_description=MeshtasticSensorEntityDescription(
+                key="node_snr",
+                name="Signal to Noise Ratio",
+                icon="mdi:signal",
+                native_unit_of_measurement=SIGNAL_STRENGTH_DECIBELS,
+                device_class=SensorDeviceClass.SIGNAL_STRENGTH,
+                state_class=SensorStateClass.MEASUREMENT,
+                value_fn=lambda device: device.coordinator.data[device.node_id].get(
+                    "snr", None
+                ),
+            ),
+            node_id=node_id,
+        )
+        for node_id, node_info in nodes.items()
+        if node_id != runtime_data.gateway_node["num"]
+    ]
+
+    entities += [
+        MeshtasticSensor(
+            coordinator=coordinator,
+            entity_description=MeshtasticSensorEntityDescription(
+                key="node_hops_away",
+                name="Hops away",
+                icon="mdi:rabbit",
+                state_class=SensorStateClass.MEASUREMENT,
+                value_fn=lambda device: device.coordinator.data[device.node_id].get(
+                    "hopsAway", None
+                ),
+            ),
+            node_id=node_id,
+        )
+        for node_id, node_info in nodes.items()
+        if node_id != runtime_data.gateway_node["num"]
+    ]
+
+    entities += [
+        MeshtasticSensor(
+            coordinator=coordinator,
+            entity_description=MeshtasticSensorEntityDescription(
+                key="node_role",
+                name="Role",
+                icon="mdi:card-account-details",
+                value_fn=lambda device: device.coordinator.data[device.node_id]
+                .get("user", {})
+                .get("role", None),
+            ),
+            node_id=node_id,
+        )
+        for node_id, node_info in nodes.items()
+        if node_id != runtime_data.gateway_node["num"]
+    ]
+    entities += [
+        MeshtasticSensor(
+            coordinator=coordinator,
+            entity_description=MeshtasticSensorEntityDescription(
+                key="node_short_name",
+                name="Short Name",
+                icon="mdi:card-account-details",
+                value_fn=lambda device: device.coordinator.data[device.node_id]
+                .get("user", {})
+                .get("shortName", None),
+            ),
+            node_id=node_id,
+        )
+        for node_id, node_info in nodes.items()
+    ]
+
+    entities += [
+        MeshtasticSensor(
+            coordinator=coordinator,
+            entity_description=MeshtasticSensorEntityDescription(
+                key="node_long_name",
+                name="Long Name",
+                icon="mdi:card-account-details",
+                value_fn=lambda device: device.coordinator.data[device.node_id]
+                .get("user", {})
+                .get("longName", None),
+            ),
+            node_id=node_id,
+        )
+        for node_id, node_info in nodes.items()
+    ]
+
+    return entities
+
+
+def _build_device_sensors(nodes, runtime_data):
+    coordinator = runtime_data.coordinator
     entities = []
 
     entities += [
@@ -134,7 +254,7 @@ def _build_device_sensors(nodes, coordinator):
             entity_description=MeshtasticSensorEntityDescription(
                 key="device_voltage",
                 name="Voltage",
-                icon="mdi:current-dc",
+                icon="mdi:lightning-bolt",
                 native_unit_of_measurement=UnitOfElectricPotential.VOLT,
                 device_class=SensorDeviceClass.VOLTAGE,
                 state_class=SensorStateClass.MEASUREMENT,
@@ -152,7 +272,7 @@ def _build_device_sensors(nodes, coordinator):
             entity_description=MeshtasticSensorEntityDescription(
                 key="device_channel_utilization",
                 name="Channel Utilization",
-                icon="mdi:radio-tower",
+                icon="mdi:signal-distance-variant",
                 native_unit_of_measurement=PERCENTAGE,
                 state_class=SensorStateClass.MEASUREMENT,
                 value_fn=lambda device: device.coordinator.data[device.node_id]
@@ -184,7 +304,8 @@ def _build_device_sensors(nodes, coordinator):
     return entities
 
 
-def _build_local_stats_sensors(nodes, coordinator) -> list[MeshtasticSensor]:
+def _build_local_stats_sensors(nodes, runtime_data) -> list[MeshtasticSensor]:
+    coordinator = runtime_data.coordinator
     nodes_with_loca_stats = {
         node_id: node_info
         for node_id, node_info in nodes.items()
@@ -203,7 +324,7 @@ def _build_local_stats_sensors(nodes, coordinator) -> list[MeshtasticSensor]:
                     state_class=SensorStateClass.TOTAL_INCREASING,
                     value_fn=lambda device: device.coordinator.data[device.node_id][
                         "localStats"
-                    ].get("numPacketsTx", 0),
+                    ].get("numPacketsTx", None),
                 ),
                 node_id=node_id,
             )
@@ -220,7 +341,7 @@ def _build_local_stats_sensors(nodes, coordinator) -> list[MeshtasticSensor]:
                     state_class=SensorStateClass.TOTAL_INCREASING,
                     value_fn=lambda device: device.coordinator.data[device.node_id][
                         "localStats"
-                    ].get("numPacketsRx", 0),
+                    ].get("numPacketsRx", None),
                 ),
                 node_id=node_id,
             )
@@ -237,7 +358,7 @@ def _build_local_stats_sensors(nodes, coordinator) -> list[MeshtasticSensor]:
                     state_class=SensorStateClass.TOTAL_INCREASING,
                     value_fn=lambda device: device.coordinator.data[device.node_id][
                         "localStats"
-                    ].get("numPacketsRxBad", 0),
+                    ].get("numPacketsRxBad", None),
                 ),
                 node_id=node_id,
             )
@@ -254,7 +375,7 @@ def _build_local_stats_sensors(nodes, coordinator) -> list[MeshtasticSensor]:
                     state_class=SensorStateClass.TOTAL_INCREASING,
                     value_fn=lambda device: device.coordinator.data[device.node_id][
                         "localStats"
-                    ].get("numRxDupe", 0),
+                    ].get("numRxDupe", None),
                 ),
                 node_id=node_id,
             )
@@ -271,7 +392,7 @@ def _build_local_stats_sensors(nodes, coordinator) -> list[MeshtasticSensor]:
                     state_class=SensorStateClass.TOTAL_INCREASING,
                     value_fn=lambda device: device.coordinator.data[device.node_id][
                         "localStats"
-                    ].get("numTxRelay", 0),
+                    ].get("numTxRelay", None),
                 ),
                 node_id=node_id,
             )
@@ -288,7 +409,7 @@ def _build_local_stats_sensors(nodes, coordinator) -> list[MeshtasticSensor]:
                     state_class=SensorStateClass.TOTAL_INCREASING,
                     value_fn=lambda device: device.coordinator.data[device.node_id][
                         "localStats"
-                    ].get("numTxRelayCanceled", 0),
+                    ].get("numTxRelayCanceled", None),
                 ),
                 node_id=node_id,
             )
@@ -305,7 +426,7 @@ def _build_local_stats_sensors(nodes, coordinator) -> list[MeshtasticSensor]:
                     state_class=SensorStateClass.TOTAL,
                     value_fn=lambda device: device.coordinator.data[device.node_id][
                         "localStats"
-                    ].get("numOnlineNodes", 0),
+                    ].get("numOnlineNodes", None),
                 ),
                 node_id=node_id,
             )
@@ -322,7 +443,7 @@ def _build_local_stats_sensors(nodes, coordinator) -> list[MeshtasticSensor]:
                     state_class=SensorStateClass.TOTAL,
                     value_fn=lambda device: device.coordinator.data[device.node_id][
                         "localStats"
-                    ].get("numTotalNodes", 0),
+                    ].get("numTotalNodes", None),
                 ),
                 node_id=node_id,
             )
@@ -365,7 +486,7 @@ def _build_power_metrics_sensors(nodes, coordinator) -> list[MeshtasticSensor]:
                             entity_description=MeshtasticSensorEntityDescription(
                                 key=f"power_ch{channel}_voltage",
                                 name=f"Channel {channel} Voltage",
-                                icon="mdi:current-dc",
+                                icon="mdi:lightning-bolt",
                                 native_unit_of_measurement=UnitOfElectricPotential.VOLT,
                                 device_class=SensorDeviceClass.VOLTAGE,
                                 state_class=SensorStateClass.MEASUREMENT,
