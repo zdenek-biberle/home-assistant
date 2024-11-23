@@ -11,6 +11,8 @@ from enum import StrEnum
 from functools import wraps
 from typing import Any
 
+from google.protobuf.json_format import MessageToJson
+from google.protobuf.message import Message
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import IntegrationError
 from pubsub import pub
@@ -267,19 +269,27 @@ class MeshtasticApiClient:
 
     async def async_get_channels(self) -> list[dict]:
         return [
-            json.loads(meshtastic.util.message_to_json(c))
+            json.loads(self._message_to_json(c))
             for c in self._interface.localNode.channels
         ]
 
-    async def async_get_node_local_config(self) -> list[dict]:
+    async def async_get_node_local_config(self) -> dict:
         return json.loads(
-            meshtastic.util.message_to_json(self._interface.localNode.localConfig)
+            self._message_to_json(self._interface.localNode.localConfig)
         )
 
-    async def async_get_node_module_config(self) -> list[dict]:
+    async def async_get_node_module_config(self) -> dict:
         return json.loads(
-            meshtastic.util.message_to_json(self._interface.localNode.moduleConfig)
+            self._message_to_json(self._interface.localNode.moduleConfig)
         )
+
+    def _message_to_json(self, message: Message) -> str:
+        try:
+            return MessageToJson(message, always_print_fields_with_no_presence=True)
+        except TypeError:
+            # older protobuf version
+            return MessageToJson(message, including_default_value_fields=True)
+
 
     async def async_get_own_node(self) -> Any:
         return self._interface.getMyNodeInfo() or {}
