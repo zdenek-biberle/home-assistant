@@ -11,8 +11,12 @@ __pycache__
 .vscode
 coverage.xml
 .ruff_cache
+.idea
 
 
 # Home Assistant configuration
 config/*
 !config/configuration.yaml
+
+/.venv/
+/.venv-*/
