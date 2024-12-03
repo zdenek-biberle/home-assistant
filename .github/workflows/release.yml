@@ -20,10 +20,10 @@ jobs:
       - name: "ZIP the integration directory"
         shell: "bash"
         run: |
-          cd "${{ github.workspace }}/custom_components/homeassistant-meshtastic"
+          cd "${{ github.workspace }}/custom_components/meshtastic"
           zip homeassistant-meshtastic.zip -r ./
 
       - name: "Upload the ZIP file to the release"
         uses: "softprops/action-gh-release@v2.1.0"
         with:
-          files: ${{ github.workspace }}/custom_components/homeassistant-meshtastic/homeassistant-meshtastic.zip
+          files: ${{ github.workspace }}/custom_components/meshtastic/homeassistant-meshtastic.zip
