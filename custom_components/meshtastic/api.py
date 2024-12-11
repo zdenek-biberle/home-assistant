@@ -1,5 +1,3 @@
-"""Sample API Client."""
-
 from __future__ import annotations
 
 import asyncio
@@ -60,6 +58,7 @@ ATTR_EVENT_MESHTASTIC_API_CONFIG_ENTRY_ID = "config_entry_id"
 ATTR_EVENT_MESHTASTIC_API_NODE = "node"
 ATTR_EVENT_MESHTASTIC_API_DATA = "data"
 ATTR_EVENT_MESHTASTIC_API_TELEMETRY_TYPE = "telemetry_type"
+ATTR_EVENT_MESHTASTIC_API_NODE_INFO = "node_info"
 
 
 class EventMeshtasticApiTelemetryType(StrEnum):
@@ -204,7 +203,11 @@ class MeshtasticApiClient:
         await self.disconnect()
 
     def _build_event_data(self, node_id: int, data: Mapping[str, Any]) -> MutableMapping[str, Any]:
-        return {"config_entry_id": self._config_entry_id, "node": node_id, "data": data}
+        return {
+            ATTR_EVENT_MESHTASTIC_API_CONFIG_ENTRY_ID: self._config_entry_id,
+            ATTR_EVENT_MESHTASTIC_API_NODE: node_id,
+            ATTR_EVENT_MESHTASTIC_API_DATA: data,
+        }
 
     async def _on_text_message(self, node: MeshNode, packet: Packet) -> None:
         event_data = self._build_event_data(
@@ -228,25 +231,25 @@ class MeshtasticApiClient:
         node_info = {"name": node.long_name}
         if device_metrics:
             event_data = self._build_event_data(node.id, device_metrics)
-            event_data["node_info"] = node_info
+            event_data[ATTR_EVENT_MESHTASTIC_API_NODE_INFO] = node_info
             event_data[ATTR_EVENT_MESHTASTIC_API_TELEMETRY_TYPE] = EventMeshtasticApiTelemetryType.DEVICE_METRICS
             self._hass.bus.async_fire(EVENT_MESHTASTIC_API_TELEMETRY, event_data)
 
         if local_stats:
             event_data = self._build_event_data(node.id, local_stats)
-            event_data["node_info"] = node_info
+            event_data[ATTR_EVENT_MESHTASTIC_API_NODE_INFO] = node_info
             event_data[ATTR_EVENT_MESHTASTIC_API_TELEMETRY_TYPE] = EventMeshtasticApiTelemetryType.LOCAL_STATS
             self._hass.bus.async_fire(EVENT_MESHTASTIC_API_TELEMETRY, event_data)
 
         if environment_metrics:
             event_data = self._build_event_data(node.id, environment_metrics)
-            event_data["node_info"] = node_info
+            event_data[ATTR_EVENT_MESHTASTIC_API_NODE_INFO] = node_info
             event_data[ATTR_EVENT_MESHTASTIC_API_TELEMETRY_TYPE] = EventMeshtasticApiTelemetryType.ENVIRONMENT_METRICS
             self._hass.bus.async_fire(EVENT_MESHTASTIC_API_TELEMETRY, event_data)
 
         if power_metrics:
             event_data = self._build_event_data(node.id, power_metrics)
-            event_data["node_info"] = node_info
+            event_data[ATTR_EVENT_MESHTASTIC_API_NODE_INFO] = node_info
             event_data[ATTR_EVENT_MESHTASTIC_API_TELEMETRY_TYPE] = EventMeshtasticApiTelemetryType.POWER_METRICS
             self._hass.bus.async_fire(EVENT_MESHTASTIC_API_TELEMETRY, event_data)
 
