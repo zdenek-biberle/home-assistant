@@ -146,6 +146,7 @@ class MeshInterface:
         self._background_tasks: set[asyncio.Task] = set()
 
         self._reconnect_lock = asyncio.Lock()
+        self._reconnect_done = asyncio.Event()
         self._listen_lock = asyncio.Lock()
 
         self._packet_stream_listeners: list[ClientApiConnectionPacketStreamListener] = []
@@ -566,35 +567,43 @@ class MeshInterface:
                     await self._reconnect_while_running()
 
     async def _reconnect_while_running(self, *, force: bool = False) -> None:
+        await asyncio.sleep(10)
         force_reconnect = force
         while self.is_running:
             try:
+                if self._reconnect_lock.locked():
+                    # other reconnect in progress, wait and return here (we don't want to queue multiple reconnect at
+                    # the reconnect lock below)
+                    self._logger.debug("Other reconnect in progress")
+                    await self._reconnect_done.wait()
+                    return
+
                 async with self._reconnect_lock:
+                    self._reconnect_done.clear()
                     self._logger.debug("Starting to reconnect")
                     try:
-                        did_reconnect = await asyncio.wait_for(
-                            self._connection.reconnect(force=force_reconnect), timeout=30
-                        )
+                        await asyncio.wait_for(self._connection.reconnect(force=force_reconnect), timeout=30)
                     except TimeoutError:
                         self._logger.debug("Reconnect connection did timeout, retrying")
                         continue
                     else:
                         self._logger.debug("Reconnect connection succeeded, requesting config")
 
-                    if did_reconnect:
-                        try:
-                            await asyncio.wait_for(self._connection.request_config(minimal=self.no_nodes), timeout=60)
-                            if not self._connected_node_ready.is_set():
-                                self._logger.debug("Completed first request config as part of reconnect")
-                                self._connected_node_ready.set()
-                        except TimeoutError:
-                            self._logger.debug("Reconnect requesting config did timeout, forcing next reconnect")
-                            force_reconnect = True
-                            continue
-                        else:
-                            force_reconnect = False
-                            self._logger.debug("Reconnect finished")
-                    return
+                    try:
+                        await asyncio.wait_for(self._connection.request_config(minimal=self.no_nodes), timeout=60)
+                        if not self._connected_node_ready.is_set():
+                            self._logger.debug("Completed first request config as part of reconnect")
+                            self._connected_node_ready.set()
+                    except TimeoutError:
+                        self._logger.debug("Reconnect requesting config did timeout, forcing next reconnect")
+                        force_reconnect = True
+                        continue
+                    else:
+                        force_reconnect = False
+                        self._logger.debug("Reconnect finished")
+                        self._reconnect_done.set()
+                        return
+
             except asyncio.CancelledError:
                 self._logger.debug("Reconnecting cancelled", exc_info=True)
                 break

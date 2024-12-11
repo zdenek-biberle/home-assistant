@@ -136,8 +136,9 @@ class ClientApiConnection:
     async def _process_packet_stream(self) -> None:
         if self._reconnect_in_progress.is_set():
             self._logger.debug("Reconnect in progress, need to wait")
-            await self._reconnect_completed.wait()
-            self._logger.debug("Reconnect completed")
+            with contextlib.suppress(asyncio.CancelledError):
+                await self._reconnect_completed.wait()
+                self._logger.debug("Reconnect completed")
 
         if not self.is_connected:
             self._logger.debug("Not connected")
@@ -397,7 +398,8 @@ class ClientApiConnection:
                                 await self._reconnect_completed.wait()
                                 self._logger.debug("On demand processing, reconnect done")
                             else:
-                                await asyncio.sleep(1)
+                                with contextlib.suppress(asyncio.CancelledError):
+                                    await asyncio.sleep(5)
                         except asyncio.CancelledError:
                             raise
                         except:  # noqa: E722
@@ -447,7 +449,7 @@ class ClientApiConnection:
         self._logger.debug("Reconnect started")
         try:
             async with self._reconnect_lock:
-                if self.is_connected:
+                if self.is_connected or force:
                     self._logger.debug("Reconnect: disconnecting first")
                     with contextlib.suppress(Exception):
                         await self._disconnect()
