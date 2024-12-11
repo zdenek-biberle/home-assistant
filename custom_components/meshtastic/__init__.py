@@ -74,6 +74,7 @@ if TYPE_CHECKING:
 PLATFORMS: list[Platform] = [
     Platform.SENSOR,
     Platform.BINARY_SENSOR,
+    Platform.DEVICE_TRACKER,
 ]
 
 ENTITY_ID_FORMAT = DOMAIN + ".{}"

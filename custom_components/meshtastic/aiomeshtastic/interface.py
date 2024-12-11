@@ -8,7 +8,6 @@ import random
 from collections import defaultdict
 from collections.abc import AsyncIterator, Awaitable, Callable, Mapping, MutableMapping
 from dataclasses import dataclass
-from decimal import Decimal
 from pathlib import Path
 from types import MappingProxyType, TracebackType
 from typing import (
@@ -39,7 +38,7 @@ from .connection import (
 )
 from .const import LOGGER, UNDEFINED
 from .errors import MeshInterfaceRequestError, MeshRoutingError, MeshtasticError
-from .packet import Packet
+from .packet import DatabaseNodeInfoPacket, FullNodeInfoPacket, Packet
 
 
 class MeshInterfaceError(MeshtasticError):
@@ -482,32 +481,46 @@ class MeshInterface:
             telemetry = packet.app_payload
             telemetry_info = google.protobuf.json_format.MessageToDict(telemetry)
             if node_id in self._node_database:
-                self._node_database[node_id].update(telemetry_info)
+                await self._node_database_update(node_id, **telemetry_info)
+        elif packet.port_num == portnums_pb2.PortNum.POSITION_APP:
+            position = packet.app_payload
+            position_info = google.protobuf.json_format.MessageToDict(position)
+            if node_id in self._node_database:
+                await self._node_database_update(node_id, position=position_info)
+        elif packet.port_num == portnums_pb2.PortNum.NODEINFO_APP:
+            node_info = packet.app_payload
+            node_info_dict = google.protobuf.json_format.MessageToDict(node_info)
+            if node_id in self._node_database:
+                await self._node_database_update(node_id, **node_info_dict)
+            else:
+                self._create_db_node(node_info.num, node_info_dict)
+                await self._notify_node_update(node_id)
 
         for listener in self._app_listeners[packet.port_num]:
             self._add_background_task(listener(node, packet), name=f"app-listener-{packet.port_num}")
 
     async def _process_node_info(self, packet: mesh_pb2.FromRadio) -> None:
-        if not packet.HasField("node_info"):
-            return
+        p = Packet(packet)
+        if packet.HasField("node_info"):
+            node_info = packet.node_info
+            node_id = node_info.num
+            try:
+                node_info_dict = google.protobuf.json_format.MessageToDict(node_info)
+                db_node = self._get_or_create_node(node_info.num)
+                db_node.update(node_info_dict)
 
-        node_info = packet.node_info
-        try:
-            node_info_dict = google.protobuf.json_format.MessageToDict(node_info)
-            node = self._get_or_create_node(node_info.num)
-            node.update(node_info_dict)
+                node = self.find_node(node_id) or MeshNode.stub_node(node_id)
+                node_info_packet = FullNodeInfoPacket(packet)
+                for listener in self._app_listeners[portnums_pb2.PortNum.NODEINFO_APP]:
+                    self._add_background_task(
+                        listener(node, node_info_packet), name=f"app-listener-{portnums_pb2.PortNum.NODEINFO_APP}"
+                    )
 
-            if "position" in node:
-                node["position"] = self._fixup_position(node["position"])
-        except:  # noqa: E722
-            self._logger.warning("Failed to process node", exc_info=True)
+            except:  # noqa: E722
+                self._logger.warning("Failed to process node info", exc_info=True)
 
-    def _fixup_position(self, position: dict) -> dict:
-        if "latitudeI" in position:
-            position["latitude"] = float(position["latitudeI"] * Decimal("1e-7"))
-        if "longitudeI" in position:
-            position["longitude"] = float(position["longitudeI"] * Decimal("1e-7"))
-        return position
+        if p.from_id:
+            await self._node_database_update(p.from_id, lastHeard=p.rx_time, snr=p.rx_snr)
 
     def _get_or_create_node(self, node_num: int) -> MutableMapping[str, Any]:
         if node_num == self.BROADCAST_NUM:
@@ -516,17 +529,27 @@ class MeshInterface:
 
         if node_num in self._node_database:
             return self._node_database[node_num]
-        presumptive_id = f"!{node_num:08x}"
-        n = {
-            "num": node_num,
-            "user": {
-                "id": presumptive_id,
-                "longName": f"Meshtastic {presumptive_id[-4:]}",
-                "shortName": f"{presumptive_id[-4:]}",
-                "hwModel": "UNSET",
-            },
-        }  # Create a minimal node db entry
+
+        return self._create_db_node(node_num)
+
+    def _create_db_node(self, node_num: int, node_info: Mapping[str, Any] | None = None) -> MutableMapping[str, Any]:
+        if node_info is None:
+            presumptive_id = f"!{node_num:08x}"
+            n = {
+                "num": node_num,
+                "user": {
+                    "id": presumptive_id,
+                    "longName": f"Meshtastic {presumptive_id[-4:]}",
+                    "shortName": f"{presumptive_id[-4:]}",
+                    "hwModel": "UNSET",
+                },
+            }  # Create a minimal node db entry
+        else:
+            n = {"num": node_num}
+            n.update(node_info)
+
         self._node_database[node_num] = n
+
         return n
 
     async def node_info_stream(self) -> AsyncIterator[mesh_pb2.NodeInfo]:
@@ -880,3 +903,19 @@ class MeshInterface:
             want_response=False,
             ack=want_ack,
         )
+
+    async def _notify_node_update(self, node_id: int) -> None:
+        node = self.find_node(node_id) or MeshNode.stub_node(node_id)
+        node_info_packet = DatabaseNodeInfoPacket(self._get_or_create_node(node.id))
+        for listener in self._app_listeners[portnums_pb2.PortNum.NODEINFO_APP]:
+            self._add_background_task(
+                listener(node, node_info_packet), name=f"app-listener-{portnums_pb2.PortNum.NODEINFO_APP}"
+            )
+
+    async def _node_database_update(self, node_id: int, **kwargs: Any) -> bool:
+        if node_id not in self._node_database:
+            return False
+
+        self._node_database[node_id].update(**kwargs)
+        await self._notify_node_update(node_id)
+        return True

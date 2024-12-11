@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from copy import deepcopy
 from datetime import timedelta
 from enum import StrEnum
 from typing import TYPE_CHECKING, Any, Self
@@ -53,6 +54,7 @@ EVENT_MESHTASTIC_API_NODE_UPDATED = EVENT_MESHTASTIC_API_BASE + "_node_updated"
 EVENT_MESHTASTIC_API_TELEMETRY = EVENT_MESHTASTIC_API_BASE + "_telemetry"
 EVENT_MESHTASTIC_API_PACKET = EVENT_MESHTASTIC_API_BASE + "_packet"
 EVENT_MESHTASTIC_API_TEXT_MESSAGE = EVENT_MESHTASTIC_API_BASE + "_text_message"
+EVENT_MESHTASTIC_API_POSITION = EVENT_MESHTASTIC_API_BASE + "_position"
 
 ATTR_EVENT_MESHTASTIC_API_CONFIG_ENTRY_ID = "config_entry_id"
 ATTR_EVENT_MESHTASTIC_API_NODE = "node"
@@ -111,10 +113,16 @@ class MeshtasticApiClient:
         self._background_tasks: set[asyncio.Task] = set()
 
         self._interface.add_packet_app_listener(
+            packet_type=portnums_pb2.PortNum.NODEINFO_APP, callback=self._on_node_info, as_dict=True
+        )
+        self._interface.add_packet_app_listener(
             packet_type=portnums_pb2.PortNum.TEXT_MESSAGE_APP, callback=self._on_text_message, as_packet=True
         )
         self._interface.add_packet_app_listener(
             packet_type=portnums_pb2.PortNum.TELEMETRY_APP, callback=self._on_telemetry, as_dict=True
+        )
+        self._interface.add_packet_app_listener(
+            packet_type=portnums_pb2.PortNum.POSITION_APP, callback=self._on_position, as_dict=True
         )
 
     async def connect(self) -> None:
@@ -128,8 +136,9 @@ class MeshtasticApiClient:
                 await asyncio.sleep(1)
                 try:
                     await self._interface.send_time()
+                    await self._interface.write_timezone_if_needed()
                 except:  # noqa: E722
-                    self._logger.debug("Send time failed")
+                    self._logger.debug("Send time failed", exc_info=True)
 
             self._add_background_task(send_time())
         except Exception as e:
@@ -163,7 +172,14 @@ class MeshtasticApiClient:
 
     async def async_get_all_nodes(self) -> Mapping[int, Mapping[str, Any]]:
         await self._interface.connected_node_ready()
-        return self._interface.nodes()
+        return {node_id: self._transform_node_info(node_info) for node_id, node_info in self._interface.nodes().items()}
+
+    def _transform_node_info(self, node_info: Mapping[str, Any]) -> Mapping[str, Any]:
+        transformed = deepcopy(node_info)
+        if "position" in transformed:
+            self._modify_position(transformed["position"])
+
+        return transformed
 
     async def send_text(
         self,
@@ -209,6 +225,14 @@ class MeshtasticApiClient:
             ATTR_EVENT_MESHTASTIC_API_DATA: data,
         }
 
+    async def _on_node_info(self, node: MeshNode, info: dict[str, Any]) -> None:
+        event_data = self._build_event_data(node.id, info)
+        position = event_data.get(ATTR_EVENT_MESHTASTIC_API_DATA, {}).get("position", {})
+        if position:
+            self._modify_position(position)
+
+        self._hass.bus.async_fire(EVENT_MESHTASTIC_API_NODE_UPDATED, event_data)
+
     async def _on_text_message(self, node: MeshNode, packet: Packet) -> None:
         event_data = self._build_event_data(
             node.id,
@@ -252,6 +276,20 @@ class MeshtasticApiClient:
             event_data[ATTR_EVENT_MESHTASTIC_API_NODE_INFO] = node_info
             event_data[ATTR_EVENT_MESHTASTIC_API_TELEMETRY_TYPE] = EventMeshtasticApiTelemetryType.POWER_METRICS
             self._hass.bus.async_fire(EVENT_MESHTASTIC_API_TELEMETRY, event_data)
+
+    async def _on_position(self, node: MeshNode, position: dict[str, Any]) -> None:
+        self._modify_position(position)
+
+        event_data = self._build_event_data(node.id, position)
+        node_info = {"name": node.long_name}
+        event_data[ATTR_EVENT_MESHTASTIC_API_NODE_INFO] = node_info
+        self._hass.bus.async_fire(EVENT_MESHTASTIC_API_POSITION, event_data)
+
+    def _modify_position(self, position: dict[str, Any]) -> None:
+        if "latitudeI" in position:
+            position["latitude"] = float(position["latitudeI"] * 10**-7)
+        if "longitudeI" in position:
+            position["longitude"] = float(position["longitudeI"] * 10**-7)
 
     async def _process_meshtastic_packet(self) -> None:
         async for packet in self._interface.packet_stream():

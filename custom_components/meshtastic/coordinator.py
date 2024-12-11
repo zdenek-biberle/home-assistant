@@ -12,6 +12,7 @@ from .api import (
     ATTR_EVENT_MESHTASTIC_API_DATA,
     ATTR_EVENT_MESHTASTIC_API_NODE,
     EVENT_MESHTASTIC_API_NODE_UPDATED,
+    EVENT_MESHTASTIC_API_POSITION,
     EVENT_MESHTASTIC_API_TELEMETRY,
     EventMeshtasticApiTelemetryType,
     MeshtasticApiClientError,
@@ -84,6 +85,7 @@ class MeshtasticDataUpdateCoordinator(DataUpdateCoordinator):
             hass.bus.async_listen(EVENT_MESHTASTIC_API_NODE_UPDATED, self._api_node_updated)
         )
         self._remove_event_listeners.append(hass.bus.async_listen(EVENT_MESHTASTIC_API_TELEMETRY, self._api_telemetry))
+        self._remove_event_listeners.append(hass.bus.async_listen(EVENT_MESHTASTIC_API_POSITION, self._api_position))
 
     async def async_shutdown(self) -> None:
         await super().async_shutdown()
@@ -95,10 +97,10 @@ class MeshtasticDataUpdateCoordinator(DataUpdateCoordinator):
                 self._logger.debug("Could not remove event listeners", exc_info=True)
 
     @meshtastic_api_event_callback
-    async def _api_node_updated(self, node_id: int, data: Mapping[str, Any], **kwargs) -> None:  # noqa: ANN003, ARG002
-        if self.data[node_id] != data:
+    async def _api_node_updated(self, node_id: int, node_data: Mapping[str, Any], **kwargs) -> None:  # noqa: ANN003, ARG002
+        if self.data[node_id] != node_data:
             data = deepcopy(self.data)
-            data[node_id] = data
+            data[node_id].update(node_data)
             self.async_set_updated_data(data)
 
     @meshtastic_api_event_callback
@@ -130,6 +132,23 @@ class MeshtasticDataUpdateCoordinator(DataUpdateCoordinator):
 
         data = deepcopy(self.data)
         data[node_id][metric_type] = new_metrics
+        self.async_set_updated_data(data)
+
+    @meshtastic_api_event_callback
+    async def _api_position(
+        self,
+        node_id: int,
+        data: Mapping[str, Any],
+        **kwargs,  # noqa: ANN003, ARG002
+    ) -> None:
+        new_position = data
+        existing_position = self.data[node_id].get("position", {})
+        if existing_position == new_position:
+            self._logger.debug("Received position identical to existing position, ignoring event")
+            return
+
+        data = deepcopy(self.data)
+        data[node_id]["position"] = new_position
         self.async_set_updated_data(data)
 
     async def _node_updated(self, event: Event) -> None:
