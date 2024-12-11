@@ -9,6 +9,7 @@ from collections import defaultdict
 from collections.abc import AsyncIterator, Awaitable, Callable, Mapping, MutableMapping
 from dataclasses import dataclass
 from decimal import Decimal
+from pathlib import Path
 from types import MappingProxyType, TracebackType
 from typing import (
     Any,
@@ -632,13 +633,36 @@ class MeshInterface:
         return task
 
     async def send_time(self, node: int | None = None) -> None:
-        local_now = datetime.datetime.now().astimezone()
-        tz_offset = local_now.tzinfo.utcoffset(local_now)
-        time_secs = int(local_now.timestamp() + tz_offset.total_seconds())
+        now = datetime.datetime.now(tz=datetime.UTC)
+        time_secs = int(now.timestamp())
         admin_message = admin_pb2.AdminMessage()
         admin_message.set_time_only = time_secs
-
         await self.send_admin_message_await_response(node=node, message=admin_message, expect_response=False)
+
+    async def write_timezone_if_needed(self, node: int | None = None) -> bool:
+        tz_string = await asyncio.get_running_loop().run_in_executor(None, self._get_tz_string)
+        if tz_string is None:
+            return False
+
+        device_config = await self.request_device_config(node=node)
+        if not device_config.tzdef or device_config.tzdef != tz_string:
+            device_config.tzdef = tz_string
+            await self.write_device_config(device_config, node=node)
+            return True
+        return False
+
+    def _get_tz_string(self) -> str | None:
+        try:
+            now = datetime.datetime.now()  # noqa: DTZ005
+            local_now = now.astimezone()
+            local_tz = local_now.tzinfo
+            local_tzname = local_tz.tzname(local_now)
+            zoneinfo_file = Path("/usr/share/zoneinfo/" + local_tzname)
+            with zoneinfo_file.open("rb") as file:
+                data = file.read().split(b"\n")[-2]
+                return data.decode("utf-8")
+        except:  # noqa: E722
+            return None
 
     async def request_connection_status(self, node: int | None = None) -> connection_status_pb2.DeviceConnectionStatus:
         admin_message = admin_pb2.AdminMessage()
@@ -646,6 +670,22 @@ class MeshInterface:
 
         response = await self.send_admin_message_await_response(node=node, message=admin_message, expect_response=True)
         return response.app_payload.get_device_connection_status_response
+
+    async def request_device_config(self, node: int | None = None) -> config_pb2.Config.DeviceConfig:
+        admin_message = admin_pb2.AdminMessage()
+        admin_message.get_config_request = admin_pb2.AdminMessage.ConfigType.DEVICE_CONFIG
+
+        response = await self.send_admin_message_await_response(node=node, message=admin_message)
+
+        return response.app_payload.get_config_response.device
+
+    async def write_device_config(self, lora: config_pb2.Config.DeviceConfig, node: int | None = None) -> None:
+        admin_message = admin_pb2.AdminMessage()
+        config = config_pb2.Config()
+        config.device.CopyFrom(lora)
+        admin_message.set_config.CopyFrom(config)
+
+        await self.send_admin_message_await_response(node=node, message=admin_message, expect_response=False)
 
     async def request_lora_config(self, node: int | None = None) -> config_pb2.Config.LoRaConfig:
         admin_message = admin_pb2.AdminMessage()
