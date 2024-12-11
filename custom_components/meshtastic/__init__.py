@@ -104,25 +104,31 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 
     await component.async_setup(config)
 
-    # handler that forwards service call to appropriate handler from config entry
-    async def handle_service_send_text(call: ServiceCall) -> ServiceResponse:
-        for _handle_send_text_handler in _service_send_text_handlers.values():
-            res = await _handle_send_text_handler(call)
-            if res != _SEND_TEXT_CANT_HANDLE_RESPONSE:
-                return res
-
-        msg = "No gateway could handle the request"
-        raise ServiceValidationError(msg)
-
-    hass.services.async_register(
-        DOMAIN,
-        SERVICE_SEND_TEXT,
-        handle_service_send_text,
-        schema=SERVICE_SEND_TEXT_SCHEMA,
-        supports_response=SupportsResponse.OPTIONAL,
-    )
+    await _setup_services(hass)
 
     return True
+
+
+async def _setup_services(hass: HomeAssistant) -> None:
+    services = hass.services.async_services_for_domain(DOMAIN)
+    if SERVICE_SEND_TEXT not in services:
+        # handler that forwards service call to appropriate handler from config entry
+        async def handle_service_send_text(call: ServiceCall) -> ServiceResponse:
+            for _handle_send_text_handler in _service_send_text_handlers.values():
+                res = await _handle_send_text_handler(call)
+                if res != _SEND_TEXT_CANT_HANDLE_RESPONSE:
+                    return res
+
+            msg = "No gateway could handle the request"
+            raise ServiceValidationError(msg)
+
+        hass.services.async_register(
+            DOMAIN,
+            SERVICE_SEND_TEXT,
+            handle_service_send_text,
+            schema=SERVICE_SEND_TEXT_SCHEMA,
+            supports_response=SupportsResponse.OPTIONAL,
+        )
 
 
 async def async_setup_entry(
@@ -155,6 +161,7 @@ async def async_setup_entry(
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     entry.async_on_unload(entry.add_update_listener(async_reload_entry))
 
+    await _setup_services(hass)
     await _setup_service_send_text_handler(hass, entry, client)
     await _setup_client_api_text_message_listener(hass, entry)
 
@@ -402,18 +409,29 @@ async def async_unload_entry(
     hass: HomeAssistant,
     entry: MeshtasticConfigEntry,
 ) -> bool:
-    for entity in [e for e in hass.data[DATA_COMPONENT].entities if e.registry_entry.config_entry_id == entry.entry_id]:
-        await hass.data[DATA_COMPONENT].async_remove_entity(entity.entity_id)
+    unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    if unload_ok:
+        for entity in [
+            e for e in hass.data[DATA_COMPONENT].entities if e.registry_entry.config_entry_id == entry.entry_id
+        ]:
+            await hass.data[DATA_COMPONENT].async_remove_entity(entity.entity_id)
 
-    if entry.runtime_data and entry.runtime_data.client:
-        await entry.runtime_data.client.disconnect()
+        if entry.runtime_data and entry.runtime_data.client:
+            await entry.runtime_data.client.disconnect()
 
-    del _service_send_text_handlers[entry.entry_id]
+        del _service_send_text_handlers[entry.entry_id]
 
-    for remove_listener in _remove_listeners.pop(entry.entry_id, []):
-        remove_listener()
+        for remove_listener in _remove_listeners.pop(entry.entry_id, []):
+            remove_listener()
 
-    return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+        loaded_entries = [
+            entry for entry in hass.config_entries.async_entries(DOMAIN) if entry.state == ConfigEntryState.LOADED
+        ]
+        if len(loaded_entries) == 1:
+            for service_name in hass.services.async_services_for_domain(DOMAIN):
+                hass.services.async_remove(DOMAIN, service_name)
+
+    return unload_ok
 
 
 async def async_reload_entry(
