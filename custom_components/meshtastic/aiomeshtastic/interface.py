@@ -549,7 +549,8 @@ class MeshInterface:
                 async for packet in listener.packets():
                     yield packet
             finally:
-                self._packet_stream_listeners.remove(listener)
+                with contextlib.suppress(ValueError):
+                    self._packet_stream_listeners.remove(listener)
 
     async def _listen_while_running(self) -> AsyncIterator[mesh_pb2.FromRadio]:
         # only allow one listener that performs reconnects

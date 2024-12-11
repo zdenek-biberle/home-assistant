@@ -125,7 +125,8 @@ class ClientApiConnection:
                 except Exception as e:
                     raise ClientApiListenInterruptedError from e
                 finally:
-                    self._packet_stream_listeners.remove(listener)
+                    with contextlib.suppress(ValueError):
+                        self._packet_stream_listeners.remove(listener)
 
     async def nodes(self) -> AsyncIterable[mesh_pb2.NodeInfo]:
         async for packet in self.listen():
