@@ -12,11 +12,13 @@ _Home Assistant Integration for [Meshtastic](https://www.meshtastic.org)._
 
 Supported Features:
  * Add meshtastic devices as gateways to interact with the mesh
-   * Supports TCP, Serial & Bluetooth connection
-   * Home Assistant Zeroconf & Bluetooth Auto-Discovery (also works with [Bluetooth Proxy](https://esphome.io/components/bluetooth_proxy.html))
+   * Supports TCP, Serial & Bluetooth connection (also works with [Bluetooth Proxy](https://esphome.io/components/bluetooth_proxy.html))
+   * Home Assistant Zeroconf, Bluetooth & USB-Serial Auto-Discovery 
  * Select which meshtastic nodes should be made available in home assistant
  * Basic meshtastic node metrics as sensors
  * Send and receive messages as device trigger and action
+ * Meshtastic node as device trackers
+ * Meshtastic node as notify target
 
 
 ## Installation
