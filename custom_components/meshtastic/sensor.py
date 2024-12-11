@@ -315,7 +315,7 @@ def _build_local_stats_sensors(
 ) -> Iterable[MeshtasticSensor]:
     coordinator = runtime_data.coordinator
     gateway = runtime_data.client.get_own_node()
-    nodes_with_loca_stats = {node_id: node_info for node_id, node_info in nodes.items() if "localStats" in node_info}
+    nodes_with_local_stats = {node_id: node_info for node_id, node_info in nodes.items() if "localStats" in node_info}
 
     entities = []
     try:
@@ -334,7 +334,7 @@ def _build_local_stats_sensors(
                 gateway=gateway,
                 node_id=node_id,
             )
-            for node_id, node_info in nodes_with_loca_stats.items()
+            for node_id, node_info in nodes_with_local_stats.items()
         ]
 
         entities += [
@@ -352,7 +352,7 @@ def _build_local_stats_sensors(
                 gateway=gateway,
                 node_id=node_id,
             )
-            for node_id, node_info in nodes_with_loca_stats.items()
+            for node_id, node_info in nodes_with_local_stats.items()
         ]
 
         entities += [
@@ -370,7 +370,7 @@ def _build_local_stats_sensors(
                 gateway=gateway,
                 node_id=node_id,
             )
-            for node_id, node_info in nodes_with_loca_stats.items()
+            for node_id, node_info in nodes_with_local_stats.items()
         ]
 
         entities += [
@@ -388,7 +388,7 @@ def _build_local_stats_sensors(
                 gateway=gateway,
                 node_id=node_id,
             )
-            for node_id, node_info in nodes_with_loca_stats.items()
+            for node_id, node_info in nodes_with_local_stats.items()
         ]
 
         entities += [
@@ -406,7 +406,7 @@ def _build_local_stats_sensors(
                 gateway=gateway,
                 node_id=node_id,
             )
-            for node_id, node_info in nodes_with_loca_stats.items()
+            for node_id, node_info in nodes_with_local_stats.items()
         ]
 
         entities += [
@@ -424,7 +424,7 @@ def _build_local_stats_sensors(
                 gateway=gateway,
                 node_id=node_id,
             )
-            for node_id, node_info in nodes_with_loca_stats.items()
+            for node_id, node_info in nodes_with_local_stats.items()
         ]
 
         entities += [
@@ -442,7 +442,7 @@ def _build_local_stats_sensors(
                 gateway=gateway,
                 node_id=node_id,
             )
-            for node_id, node_info in nodes_with_loca_stats.items()
+            for node_id, node_info in nodes_with_local_stats.items()
         ]
 
         entities += [
@@ -460,7 +460,7 @@ def _build_local_stats_sensors(
                 gateway=gateway,
                 node_id=node_id,
             )
-            for node_id, node_info in nodes_with_loca_stats.items()
+            for node_id, node_info in nodes_with_local_stats.items()
         ]
     except:  # noqa: E722
         LOGGER.warning("Failed to create local stats entities", exc_info=True)
