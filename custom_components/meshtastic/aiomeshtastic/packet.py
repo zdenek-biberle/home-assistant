@@ -14,11 +14,11 @@ class Packet[T]:
         self._logger = LOGGER.getChild(self.__class__.__name__)
 
     @property
-    def from_id(self) -> str | None:
+    def from_id(self) -> int | None:
         return getattr(self.mesh_packet, "from") if self.mesh_packet is not None else None
 
     @property
-    def to_id(self) -> str | None:
+    def to_id(self) -> int | None:
         return self.mesh_packet.to if self.mesh_packet is not None else None
 
     @property
