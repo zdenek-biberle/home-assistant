@@ -483,7 +483,7 @@ def _build_power_metrics_sensors(
     try:
         for node_id, node_info in nodes_with_power_metrics.items():
             power_metrics = node_info["powerMetrics"]
-            for channel in range(1, 3):
+            for channel in range(1, 4):
                 voltage_key = f"ch{channel}Voltage"
                 current_key = f"ch{channel}Current"
 
