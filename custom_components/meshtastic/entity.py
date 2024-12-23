@@ -70,7 +70,7 @@ class GatewayEntity(MeshtasticEntity):
         self._module_config = module_config
         self._short_name = short_name
 
-        self._attr_name = "Node"
+        self._attr_name = None
         self._attr_has_entity_name = True
 
         def flatten(
