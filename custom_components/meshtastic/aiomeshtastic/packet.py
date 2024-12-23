@@ -83,6 +83,14 @@ class Packet[T]:
         self._logger.debug("Unhandled portnum %s", port_num)
         return None
 
+    @property
+    def pki_encrypted(self) -> bool:
+        return self.mesh_packet.pki_encrypted if self.mesh_packet is not None else False
+
+    @property
+    def channel_index(self) -> int | None:
+        return self.mesh_packet.channel if self.mesh_packet is not None else None
+
 
 class FullNodeInfoPacket(Packet[mesh_pb2.NodeInfo]):
     def __init__(self, packet: mesh_pb2.FromRadio) -> None:

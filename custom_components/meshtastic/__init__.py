@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 import voluptuous as vol
 from homeassistant import config_entries
+from homeassistant.components.logbook import DOMAIN as LOGBOOK_DOMAIN
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.const import (
     CONF_DEVICE_ID,
@@ -261,6 +262,9 @@ async def _setup_client_api_text_message_listener(hass: HomeAssistant, entry: Me
             )
 
     _remove_listeners[entry.entry_id].append(hass.bus.async_listen(EVENT_MESHTASTIC_API_TEXT_MESSAGE, _on_text_message))
+    # listeners
+    cancel_message_logger = await async_setup_message_logger(hass, entry)
+    _remove_listeners[entry.entry_id].append(cancel_message_logger)
 
 
 async def _setup_meshtastic_devices(
@@ -388,7 +392,15 @@ async def _setup_meshtastic_entities(
         local_config=local_config,
         module_config=module_config,
     )
-    await _add_entities_for_entry(hass, [gateway_node_entity], entry)
+    has_logbook = LOGBOOK_DOMAIN in hass.config.all_components
+    gateway_direct_message = GatewayDirectMessageEntity(
+        config_entry_id=entry.entry_id,
+        gateway_node=gateway_node["num"],
+        gateway_entity=gateway_node_entity,
+        has_logbook=has_logbook,
+    )
+
+    await _add_entities_for_entry(hass, [gateway_node_entity, gateway_direct_message], entry)
     channels = await client.async_get_channels()
     channel_entities = [
         GatewayChannelEntity(
@@ -400,6 +412,7 @@ async def _setup_meshtastic_entities(
             primary=channel["role"] == "PRIMARY",
             secondary=channel["role"] == "SECONDARY",
             settings=channel["settings"],
+            has_logbook=has_logbook,
         )
         for channel in channels
         if channel["role"] != "DISABLED"

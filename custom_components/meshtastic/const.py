@@ -22,6 +22,9 @@ CONF_OPTION_ADD_ANOTHER_NODE = "add_another_node"
 
 SERVICE_SEND_TEXT = "send_text"
 
+STATE_ATTRIBUTE_CHANNEL_INDEX = "index"
+STATE_ATTRIBUTE_CHANNEL_NODE = "node"
+
 
 class ConnectionType(enum.StrEnum):
     TCP = "tcp"

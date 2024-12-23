@@ -10,16 +10,18 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity import Entity
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN
+from .const import DOMAIN, STATE_ATTRIBUTE_CHANNEL_INDEX, STATE_ATTRIBUTE_CHANNEL_NODE
 from .coordinator import MeshtasticDataUpdateCoordinator
 
 if typing.TYPE_CHECKING:
     from homeassistant.helpers.entity import EntityDescription
+    from homeassistant.helpers.typing import UndefinedType
 
 
 class MeshtasticDeviceClass(StrEnum):
     GATEWAY = "gateway"
     CHANNEL = "channel"
+    MESSAGES = "messages"
 
 
 class MeshtasticEntity(Entity):
@@ -32,6 +34,7 @@ class MeshtasticEntity(Entity):
         meshtastic_class: MeshtasticDeviceClass,
         meshtastic_id: str | int | None = None,
     ) -> None:
+        super().__init__()
         self._attr_meshtastic_class = meshtastic_class
         self._attr_unique_id = f"{config_entry_id}_{meshtastic_class}_{node}"
         if meshtastic_id is not None:
@@ -98,6 +101,15 @@ class GatewayEntity(MeshtasticEntity):
 class GatewayChannelEntity(MeshtasticEntity):
     _attr_icon = "mdi:forum"
 
+    @staticmethod
+    def build_unique_id(
+        config_entry_id: str,
+        gateway_node: int,
+        index: int,
+        device_class: MeshtasticDeviceClass = MeshtasticDeviceClass.CHANNEL,
+    ) -> str:
+        return f"{config_entry_id}_{device_class}_{gateway_node}_{index}"
+
     def __init__(  # noqa: PLR0913
         self,
         config_entry_id: str,
@@ -108,6 +120,7 @@ class GatewayChannelEntity(MeshtasticEntity):
         settings: dict,
         primary: bool = False,  # noqa: FBT001, FBT002
         secondary: bool = False,  # noqa: FBT001, FBT002
+        has_logbook: bool = True,  # noqa: FBT001, FBT002
     ) -> None:
         super().__init__(config_entry_id, gateway_node, MeshtasticDeviceClass.CHANNEL, index)
 
@@ -115,8 +128,8 @@ class GatewayChannelEntity(MeshtasticEntity):
         self._attr_messages = []
         self._settings = settings
         self._gateway_suggested_id = gateway_entity.suggested_object_id
-
-        self._attr_unique_id = f"{config_entry_id}_{self.device_class}_{gateway_node}_{index}"
+        self._attr_unique_id = self.build_unique_id(config_entry_id, gateway_node, index)
+        self._attr_translation_key = "channel"
 
         if name:
             self._attr_has_entity_name = True
@@ -130,10 +143,15 @@ class GatewayChannelEntity(MeshtasticEntity):
 
         self._attr_name = "Channel " + self._attr_name
 
-        self._attr_state = f"Channel #{index}"
+        if has_logbook:
+            self._attr_state = "logging"
+        else:
+            self._attr_state = "logbook_missing"
+
         self._attr_should_poll = False
         self._attr_extra_state_attributes = {
-            "node": gateway_node,
+            STATE_ATTRIBUTE_CHANNEL_INDEX: index,
+            STATE_ATTRIBUTE_CHANNEL_NODE: gateway_node,
             "primary": primary,
             "secondary": secondary,
             "psk": self._settings["psk"],
@@ -188,6 +206,7 @@ class MeshtasticNodeEntity(MeshtasticCoordinatorEntity, ABC):
         self._attr_unique_id = (
             f"{coordinator.config_entry.entry_id}_{platform}_" f"{self.node_id}_{self.entity_description.key}"
         )
+        self._attr_has_entity_name = True
 
     @property
     def node_id(self) -> int:
