@@ -864,6 +864,7 @@ class MeshInterface:
         *,
         want_ack: bool = False,
         channel_index: int | None = None,
+        priority: Optional[MeshPacket.Priority] = None,  # noqa: UP007
     ) -> None:
         if isinstance(destination, MeshNode):
             to_node = destination.id
@@ -891,15 +892,16 @@ class MeshInterface:
 
             channel = self._connected_node_channels[channel_index]
             if channel.role == channel_pb2.Channel.Role.DISABLED:
-                msg = f"Channel {channel.settings.name} ({channel.settings.id}) is disabled"
+                msg = f"Channel #{channel_index} is disabled"
                 raise ValueError(msg)
 
         return await self._connection.send_mesh_packet(
             channel_index=channel_index,
             to_node=to_node,
+            from_node=self._connected_node_info.my_node_num,
             message=text.encode("utf-8"),
             port_num=portnums_pb2.PortNum.TEXT_MESSAGE_APP,
-            priority=MeshPacket.Priority.RELIABLE if want_ack else MeshPacket.Priority.DEFAULT,
+            priority=priority or (MeshPacket.Priority.RELIABLE if want_ack else MeshPacket.Priority.DEFAULT),
             want_response=False,
             ack=want_ack,
         )
