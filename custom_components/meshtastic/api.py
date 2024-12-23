@@ -17,6 +17,9 @@ from .aiomeshtastic import (
     BluetoothConnection as AioBluetoothConnection,
 )
 from .aiomeshtastic import (
+    MeshInterface,
+)
+from .aiomeshtastic import (
     MeshInterface as AioMeshInterface,
 )
 from .aiomeshtastic import (
@@ -25,6 +28,7 @@ from .aiomeshtastic import (
 from .aiomeshtastic import (
     TcpConnection as AioTcpConnection,
 )
+from .aiomeshtastic.errors import MeshRoutingError, MeshtasticError
 from .const import (
     CONF_CONNECTION_BLUETOOTH_ADDRESS,
     CONF_CONNECTION_SERIAL_PORT,
@@ -43,7 +47,7 @@ if TYPE_CHECKING:
     from google.protobuf.message import Message
     from homeassistant.core import HomeAssistant
 
-    from .aiomeshtastic.interface import MeshNode
+    from .aiomeshtastic.interface import MeshNode, TelemetryType
     from .aiomeshtastic.packet import Packet
 
 _LOGGER = LOGGER.getChild(__name__)
@@ -170,6 +174,9 @@ class MeshtasticApiClient:
     def get_own_node(self) -> Mapping[str, Any]:
         return self._interface.connected_node() or {}
 
+    def get_node_info(self, node_id: int) -> MeshNode | None:
+        return self._interface.find_node(node_id=node_id)
+
     async def async_get_all_nodes(self) -> Mapping[int, Mapping[str, Any]]:
         await self._interface.connected_node_ready()
         return {node_id: self._transform_node_info(node_info) for node_id, node_info in self._interface.nodes().items()}
@@ -201,6 +208,8 @@ class MeshtasticApiClient:
             )
         except TimeoutError:
             return False
+        except Exception as e:
+            raise MeshtasticApiClientError from e
         else:
             return True
 
@@ -312,3 +321,27 @@ class MeshtasticApiClient:
         except TypeError:
             # older protobuf version
             return MessageToDict(message, including_default_value_fields=True)
+
+    async def request_telemetry(self, node: int, telemetry_type: TelemetryType) -> Mapping[str, Any]:
+        try:
+            response = await self._interface.request_telemetry(node, telemetry_type=telemetry_type)
+            return self._message_to_dict(response)
+        except MeshRoutingError as e:
+            msg = f"No response for {telemetry_type}"
+            raise MeshtasticApiClientError(msg) from e
+        except MeshtasticError as e:
+            raise MeshtasticApiClientError(str(e)) from e
+
+    async def request_position(self, node: int) -> Mapping[str, Any]:
+        try:
+            response = await self._interface.request_position(node)
+            return self._message_to_dict(response)
+        except MeshtasticError as e:
+            raise MeshtasticApiClientError(str(e)) from e
+
+    async def request_traceroute(self, node: int) -> Mapping[str, Any]:
+        try:
+            response = await self._interface.request_traceroute(node)
+            return self._message_to_dict(response)
+        except MeshtasticError as e:
+            raise MeshtasticApiClientError(str(e)) from e

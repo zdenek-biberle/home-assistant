@@ -756,7 +756,21 @@ class MeshInterface:
             want_response=True,
             timeout=timeout,
         )
+        return response.app_payload
 
+    async def request_position(
+        self,
+        node: int | MeshNode,
+        timeout: float = UNDEFINED,  # noqa: ASYNC109
+    ) -> telemetry_pb2.Telemetry:
+        position = mesh_pb2.Position()
+        response = await self._send_message_await_response(
+            node=node.id if isinstance(node, MeshNode) else node,
+            message=position,
+            port_num=portnums_pb2.PortNum.POSITION_APP,
+            want_response=True,
+            timeout=timeout,
+        )
         return response.app_payload
 
     async def _send_message_await_response(  # noqa: PLR0913
