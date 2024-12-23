@@ -12,6 +12,7 @@ from pathlib import Path
 from types import MappingProxyType, TracebackType
 from typing import (
     Any,
+    Optional,
     Self,
 )
 
@@ -458,7 +459,7 @@ class MeshInterface:
 
             await self._process_packet_for_app_listener(from_radio)
 
-    async def _process_packet_for_app_listener(self, from_radio: mesh_pb2.FromRadio) -> None:
+    async def _process_packet_for_app_listener(self, from_radio: mesh_pb2.FromRadio) -> None:  # noqa: PLR0912
         packet = Packet(from_radio)
         if packet.mesh_packet is None:
             return
@@ -495,6 +496,8 @@ class MeshInterface:
             else:
                 self._create_db_node(node_info.num, node_info_dict)
                 await self._notify_node_update(node_id)
+        elif packet.port_num == portnums_pb2.PortNum.TRACEROUTE_APP:
+            pass
 
         for listener in self._app_listeners[packet.port_num]:
             self._add_background_task(listener(node, packet), name=f"app-listener-{packet.port_num}")
@@ -921,3 +924,16 @@ class MeshInterface:
         self._node_database[node_id].update(**kwargs)
         await self._notify_node_update(node_id)
         return True
+
+    async def request_traceroute(self, node: int | MeshNode, timeout: float = UNDEFINED) -> mesh_pb2.RouteDiscovery:  # noqa: ASYNC109
+        route_discovery = mesh_pb2.RouteDiscovery()
+
+        response = await self._send_message_await_response(
+            node=node.id if isinstance(node, MeshNode) else node,
+            message=route_discovery,
+            port_num=portnums_pb2.PortNum.TRACEROUTE_APP,
+            want_response=True,
+            timeout=timeout,
+        )
+
+        return response.app_payload

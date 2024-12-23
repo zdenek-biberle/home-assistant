@@ -76,6 +76,10 @@ class Packet[T]:
             node_info.user.ParseFromString(payload)
             node_info.num = self.from_id
             return node_info
+        if port_num == portnums_pb2.PortNum.TRACEROUTE_APP:
+            route_discovery = mesh_pb2.RouteDiscovery()
+            route_discovery.ParseFromString(payload)
+            return route_discovery
         self._logger.debug("Unhandled portnum %s", port_num)
         return None
 
