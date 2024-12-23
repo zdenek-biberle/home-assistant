@@ -10,42 +10,27 @@ from __future__ import annotations
 import base64
 import datetime
 from collections import defaultdict
-from copy import deepcopy
+from collections.abc import Callable
 from typing import TYPE_CHECKING, Any, cast
 
-import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.components.logbook import DOMAIN as LOGBOOK_DOMAIN
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.const import (
-    CONF_DEVICE_ID,
     CONF_HOST,
     CONF_PORT,
-    CONF_TYPE,
     Platform,
 )
-from homeassistant.core import (
-    Event,
-    HomeAssistant,
-    ServiceCall,
-    ServiceResponse,
-    SupportsResponse,
-)
-from homeassistant.exceptions import ConfigEntryNotReady, ServiceValidationError
+from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_component import EntityComponent
 from homeassistant.helpers.typing import UNDEFINED, ConfigType
 from homeassistant.loader import async_get_loaded_integration
-from homeassistant.util.hass_dict import HassKey
 
-from meshtastic import BROADCAST_ADDR
-
+from . import services
 from .api import (
-    ATTR_EVENT_MESHTASTIC_API_CONFIG_ENTRY_ID,
-    ATTR_EVENT_MESHTASTIC_API_DATA,
-    EVENT_MESHTASTIC_API_TEXT_MESSAGE,
     MeshtasticApiClient,
 )
 from .const import (
@@ -57,81 +42,44 @@ from .const import (
     CURRENT_CONFIG_VERSION_MINOR,
     DOMAIN,
     LOGGER,
-    SERVICE_SEND_TEXT,
     ConnectionType,
 )
 from .coordinator import MeshtasticDataUpdateCoordinator
-from .data import MeshtasticConfigEntry, MeshtasticData
-from .device_trigger import TRIGGER_MESSAGE_RECEIVED, TRIGGER_MESSAGE_SENT
-from .entity import GatewayChannelEntity, GatewayEntity, MeshtasticCoordinatorEntity
+from .data import DATA_COMPONENT, MeshtasticConfigEntry, MeshtasticData
+from .entity import (
+    GatewayChannelEntity,
+    GatewayDirectMessageEntity,
+    GatewayEntity,
+    MeshtasticEntity,
+)
 from .helpers import fetch_meshtastic_hardware_names
+from .logbook import async_setup_message_logger
 
 if TYPE_CHECKING:
-    from collections.abc import Awaitable, Callable, Mapping, MutableMapping
+    from collections.abc import Callable, Mapping, MutableMapping
 
+    from homeassistant.core import HomeAssistant
     from homeassistant.helpers.device_registry import DeviceRegistry
     from homeassistant.helpers.entity import Entity
 
-PLATFORMS: list[Platform] = [
-    Platform.SENSOR,
-    Platform.BINARY_SENSOR,
-    Platform.DEVICE_TRACKER,
-    Platform.NOTIFY,
-]
+PLATFORMS: list[Platform] = [Platform.SENSOR, Platform.BINARY_SENSOR, Platform.DEVICE_TRACKER, Platform.NOTIFY]
 
 ENTITY_ID_FORMAT = DOMAIN + ".{}"
 PLATFORM_SCHEMA = cv.PLATFORM_SCHEMA
 PLATFORM_SCHEMA_BASE = cv.PLATFORM_SCHEMA_BASE
 SCAN_INTERVAL = datetime.timedelta(hours=1)
 
-DATA_COMPONENT: HassKey[EntityComponent[MeshtasticCoordinatorEntity]] = HassKey(DOMAIN)
 
-SERVICE_SEND_TEXT_SCHEMA = vol.Schema(
-    {
-        vol.Required("text"): cv.string,
-        vol.Required("to"): cv.string,
-        vol.Optional("from"): cv.string,
-        vol.Required("ack", default=False): cv.boolean,
-    }
-)
-
-_SEND_TEXT_CANT_HANDLE_RESPONSE = object()
-_service_send_text_handlers: dict[str, Callable[[ServiceCall], Awaitable[ServiceResponse]]] = {}
 _remove_listeners: MutableMapping[str, list[Callable[[], None]]] = defaultdict(list)
 
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
-    component = hass.data[DATA_COMPONENT] = EntityComponent[MeshtasticCoordinatorEntity](
-        LOGGER, DOMAIN, hass, SCAN_INTERVAL
-    )
+    component = hass.data[DATA_COMPONENT] = EntityComponent[MeshtasticEntity](LOGGER, DOMAIN, hass, SCAN_INTERVAL)
 
     await component.async_setup(config)
-
-    await _setup_services(hass)
+    await services.async_setup_services(hass)
 
     return True
-
-
-async def _setup_services(hass: HomeAssistant) -> None:
-    services = hass.services.async_services_for_domain(DOMAIN)
-    if SERVICE_SEND_TEXT not in services:
-        # handler that forwards service call to appropriate handler from config entry
-        async def handle_service_send_text(call: ServiceCall) -> ServiceResponse:
-            for _handle_send_text_handler in _service_send_text_handlers.values():
-                res = await _handle_send_text_handler(call)
-                if res != _SEND_TEXT_CANT_HANDLE_RESPONSE:
-                    return res
-
-            msg = "No gateway could handle the request"
-            raise ServiceValidationError(msg)
-
-        hass.services.async_register(
-            DOMAIN,
-            SERVICE_SEND_TEXT,
-            handle_service_send_text,
-            schema=SERVICE_SEND_TEXT_SCHEMA,
-            supports_response=SupportsResponse.OPTIONAL,
-        )
 
 
 async def async_setup_entry(
@@ -148,8 +96,7 @@ async def async_setup_entry(
         await client.connect()
     except Exception as e:
         raise ConfigEntryNotReady from e
-    await _setup_meshtastic_devices(hass, entry, client)
-    await _setup_meshtastic_entities(hass, entry, client)
+
     gateway_node = await client.async_get_own_node()
     entry.runtime_data = MeshtasticData(
         client=client,
@@ -164,107 +111,15 @@ async def async_setup_entry(
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     entry.async_on_unload(entry.add_update_listener(async_reload_entry))
 
-    await _setup_services(hass)
-    await _setup_service_send_text_handler(hass, entry, client)
-    await _setup_client_api_text_message_listener(hass, entry)
+    await _setup_meshtastic_devices(hass, entry, client)
+    await _setup_meshtastic_entities(hass, entry, client)
 
-    return True
+    await services.async_register_gateway(hass, entry)
 
-
-async def _setup_service_send_text_handler(
-    hass: HomeAssistant, entry: MeshtasticConfigEntry, client: MeshtasticApiClient
-) -> None:
-    device_registry = dr.async_get(hass)
-    gateway_node = await client.async_get_own_node()
-
-    async def handle_send_text(call: ServiceCall) -> ServiceResponse | object:  # noqa: PLR0912
-        def _convert_device_id_to_node_id(device_id: str) -> int:
-            device = device_registry.async_get(device_id)
-            if device is None:
-                msg = f"No device found with id {from_id}"
-                raise ServiceValidationError(msg)
-
-            return next((int(i[1]) for i in device.identifiers if i[0] == DOMAIN), None)
-
-        if "from" in call.data:
-            from_id = call.data["from"]
-            if from_id.startswith("!"):
-                if gateway_node["user"]["id"] != from_id:
-                    return _SEND_TEXT_CANT_HANDLE_RESPONSE
-            elif from_id.isnumeric():
-                if int(from_id) != gateway_node["num"]:
-                    return _SEND_TEXT_CANT_HANDLE_RESPONSE
-            elif from_id.isalnum():
-                node_id = _convert_device_id_to_node_id(from_id)
-                if node_id != gateway_node["num"]:
-                    return _SEND_TEXT_CANT_HANDLE_RESPONSE
-        try:
-            if "to" in call.data:
-                to = call.data["to"]
-                if to.startswith("!"):
-                    pass
-                elif to.isnumeric():
-                    to = int(to)
-                elif to.isalnum():
-                    to = int(_convert_device_id_to_node_id(to))
-            else:
-                to = BROADCAST_ADDR
-
-            await client.send_text(text=call.data["text"], destination_id=to, want_ack=call.data["ack"])
-
-            if not call.return_response:
-                return None
-            return {"to": to}  # noqa: TRY300
-        except Exception as e:
-            LOGGER.warning("Error sending text", exc_info=True)
-            msg = "Failed to send text"
-            raise ServiceValidationError(msg) from e
-
-    _service_send_text_handlers[entry.entry_id] = handle_send_text
-
-
-async def _setup_client_api_text_message_listener(hass: HomeAssistant, entry: MeshtasticConfigEntry) -> None:
-    device_registry = dr.async_get(hass)
-
-    async def _on_text_message(event: Event) -> None:
-        event_data = deepcopy(event.data)
-        config_entry_id = event_data.pop(ATTR_EVENT_MESHTASTIC_API_CONFIG_ENTRY_ID, None)
-        if config_entry_id != entry.entry_id:
-            return
-
-        data = event_data.get(ATTR_EVENT_MESHTASTIC_API_DATA, None)
-        if data is None:
-            return
-
-        from_node_id = data["from"]
-        from_device = device_registry.async_get_device(identifiers={(DOMAIN, str(from_node_id))})
-        to_node_id = data["to"]
-        to_device = device_registry.async_get_device(identifiers={(DOMAIN, str(to_node_id))})
-
-        if from_device:
-            hass.bus.async_fire(
-                event_type=f"{DOMAIN}_event",
-                event_data={
-                    CONF_DEVICE_ID: from_device.id,
-                    CONF_TYPE: TRIGGER_MESSAGE_SENT,
-                    "message": data["message"],
-                },
-            )
-
-        if to_device:
-            hass.bus.async_fire(
-                event_type=f"{DOMAIN}_event",
-                event_data={
-                    CONF_DEVICE_ID: to_device.id,
-                    CONF_TYPE: TRIGGER_MESSAGE_RECEIVED,
-                    "message": data["message"],
-                },
-            )
-
-    _remove_listeners[entry.entry_id].append(hass.bus.async_listen(EVENT_MESHTASTIC_API_TEXT_MESSAGE, _on_text_message))
     # listeners
     cancel_message_logger = await async_setup_message_logger(hass, entry)
     _remove_listeners[entry.entry_id].append(cancel_message_logger)
+    return True
 
 
 async def _setup_meshtastic_devices(
@@ -434,17 +289,10 @@ async def async_unload_entry(
         if entry.runtime_data and entry.runtime_data.client:
             await entry.runtime_data.client.disconnect()
 
-        del _service_send_text_handlers[entry.entry_id]
+        await services.async_unregister_gateway(hass, entry)
 
         for remove_listener in _remove_listeners.pop(entry.entry_id, []):
             remove_listener()
-
-        loaded_entries = [
-            entry for entry in hass.config_entries.async_entries(DOMAIN) if entry.state == ConfigEntryState.LOADED
-        ]
-        if len(loaded_entries) == 1:
-            for service_name in hass.services.async_services_for_domain(DOMAIN):
-                hass.services.async_remove(DOMAIN, service_name)
 
     return unload_ok
 

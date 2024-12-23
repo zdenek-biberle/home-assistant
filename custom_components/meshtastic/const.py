@@ -1,5 +1,8 @@
 import enum
 from logging import Logger, getLogger
+from typing import Final, TypedDict
+
+from homeassistant.util.event_type import EventType
 
 LOGGER: Logger = getLogger(__package__)
 
@@ -21,6 +24,24 @@ CONF_OPTION_NODE = "node"
 CONF_OPTION_ADD_ANOTHER_NODE = "add_another_node"
 
 SERVICE_SEND_TEXT = "send_text"
+SERVICE_SEND_DIRECT_MESSAGE = "send_direct_message"
+SERVICE_BROADCAST_CHANNEL_MESSAGE = "broadcast_channel_message"
+SERVICE_REQUEST_TELEMETRY = "request_telemetry"
+SERVICE_REQUEST_POSITION = "request_position"
+SERVICE_REQUEST_TRACEROUTE = "request_traceroute"
+
+ATTR_SERVICE_DATA_TO = "to"
+ATTR_SERVICE_DATA_CHANNEL = "channel"
+ATTR_SERVICE_DATA_FROM = "from"
+ATTR_SERVICE_DATA_ACK = "ack"
+
+
+ATTR_SERVICE_SEND_TEXT_DATA_TEXT = "text"
+ATTR_SERVICE_SEND_DIRECT_MESSAGE_DATA_MESSAGE = "message"
+ATTR_SERVICE_BROADCAST_CHANNEL_MESSAGE_DATA_MESSAGE = "message"
+ATTR_SERVICE_BROADCAST_CHANNEL_MESSAGE_DATA_CHANNEL = "channel"
+
+ATTR_SERVICE_REQUEST_TELEMETRY_DATA_TYPE = "type"
 
 STATE_ATTRIBUTE_CHANNEL_INDEX = "index"
 STATE_ATTRIBUTE_CHANNEL_NODE = "node"
@@ -30,3 +51,39 @@ class ConnectionType(enum.StrEnum):
     TCP = "tcp"
     BLUETOOTH = "bluetooth"
     SERIAL = "serial"
+
+
+class MeshtasticDomainEventType(enum.StrEnum):
+    MESSAGE_RECEIVED = "message.received"
+    MESSAGE_SENT = "message.sent"
+
+
+EVENT_MESHTASTIC_DOMAIN_EVENT_DATA_ATTR_MESSAGE: Final = "message"
+
+
+class MeshtasticDomainEventData(TypedDict):
+    CONF_DEVICE_ID: str
+    CONF_ENTITY_ID: str | None
+    EVENT_MESHTASTIC_DOMAIN_EVENT_DATA_ATTR_MESSAGE: str
+
+
+# Primary user facing event
+EVENT_MESHTASTIC_DOMAIN_EVENT: EventType[MeshtasticDomainEventData] = EventType(f"{DOMAIN}_event")
+
+
+EVENT_MESHTASTIC_MESSAGE_LOG_EVENT_DATA_ATTR_FROM_NAME: Final = "from_name"
+EVENT_MESHTASTIC_MESSAGE_LOG_EVENT_DATA_ATTR_PKI: Final = "pki"
+EVENT_MESHTASTIC_MESSAGE_LOG_EVENT_DATA_ATTR_MESSAGE: Final = "message"
+
+
+class MeshtasticDomainMessageLogEventData(TypedDict):
+    CONF_DEVICE_ID: str
+    CONF_ENTITY_ID: str
+    EVENT_MESHTASTIC_MESSAGE_LOG_EVENT_DATA_ATTR_MESSAGE: str
+    EVENT_MESHTASTIC_MESSAGE_LOG_EVENT_DATA_ATTR_FROM_NAME: str
+    EVENT_MESHTASTIC_MESSAGE_LOG_EVENT_DATA_ATTR_PKI: bool
+    messEVENT_MESHTASTIC_DOMAIN_EVENT_DATA_ATTR_MESSAGEage: str
+
+
+# Event used for logbook
+EVENT_MESHTASTIC_DOMAIN_MESSAGE_LOG: EventType[MeshtasticDomainMessageLogEventData] = EventType(f"{DOMAIN}_message_log")

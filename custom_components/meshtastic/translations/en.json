@@ -34,7 +34,7 @@
           "bluetooth_address": "Device address in form of 00:11:22:33:FF:EE"
         }
       },
-       "discovery_bluetooth_confirm": {
+      "discovery_bluetooth_confirm": {
         "description": "Connect Device via Bluetooth.\n**IMPORTANT**: PIN is not supported, please remove it first.\n\nPlease be patient, initial setup takes a while when device has a large node db",
         "data": {
           "bluetooth_address": "Bluetooth Address"
@@ -98,7 +98,7 @@
   "services": {
     "send_text": {
       "name": "Send Text",
-      "description": "Send text to node or channel",
+      "description": "Advanced use only! Consider using Actions \"Send Direct Message\" or \"Broadcast Channel Message\" instead.",
       "fields": {
         "text": {
           "name": "Text Message",
@@ -106,17 +106,154 @@
         },
         "from": {
           "name": "From",
-          "description": "Select the gateway node to send the message from. If not provided, the best gateway node is chosen automatically."
+          "description": "Select the gateway node to send the message from. If not provided, the best gateway node is chosen automatically. Can be a home assistant device, meshtastic node number or meshtastic user id."
         },
         "to": {
           "name": "To",
           "description": "Can be a home assistant device, meshtastic node number or meshtastic user id"
+        },
+        "channel": {
+          "name": "Channel",
+          "description": "Can be a home assistant channel entity or meshtastic channel index. IMPORTANT: channel index is node specific, consider setting From in case channel index differ between your gateway nodes."
         },
         "ack": {
           "name": "Acknowledgement",
           "description": "Request an acknowledgement"
         }
       }
+    },
+    "send_direct_message": {
+      "name": "Send Direct Message",
+      "description": "Send a direct message to a meshtastic device. If you have not configured your desired node, you can use \"Notifications: Send a notification message\" action instead.",
+      "fields": {
+        "message": {
+          "name": "Text Message",
+          "description": "Message to send (max 200 bytes)"
+        },
+        "to": {
+          "name": "Device",
+          "description": ""
+        },
+        "ack": {
+          "name": "Acknowledgement",
+          "description": "Request an acknowledgement"
+        }
+      }
+    },
+    "broadcast_channel_message": {
+      "name": "Broadcast Channel Message",
+      "description": "Broadcast message to a channel",
+      "fields": {
+        "message": {
+          "name": "Text Message",
+          "description": "Message to send (max 200 bytes)"
+        },
+        "channel": {
+          "name": "Channel",
+          "description": ""
+        },
+        "ack": {
+          "name": "Acknowledgement",
+          "description": "Request an acknowledgement"
+        }
+      }
+    },
+    "request_telemetry": {
+      "name": "Request Telemetry",
+      "description": "",
+      "fields": {
+        "from": {
+          "name": "From",
+          "description": "Gateway. If not provided, the best gateway node is chosen automatically."
+        },
+        "to": {
+          "name": "Device",
+          "description": ""
+        },
+        "type": {
+          "name": "Telemetry Type",
+          "description": ""
+        }
+      }
+    },
+    "request_position": {
+      "name": "Request Position",
+      "description": "",
+      "fields": {
+        "from": {
+          "name": "From",
+          "description": "Gateway. If not provided, the best gateway node is chosen automatically."
+        },
+        "to": {
+          "name": "Device",
+          "description": ""
+        }
+      }
+    },
+    "request_traceroute": {
+      "name": "Request Traceroute",
+      "description": "NOTE: Traceroute is rate limited by meshtastic firmware, only send at most once every minute. In case you are rate limited, you will get no feedback.",
+      "fields": {
+        "from": {
+          "name": "From",
+          "description": "Gateway. If not provided, the best gateway node is chosen automatically."
+        },
+        "to": {
+          "name": "Device",
+          "description": ""
+        }
+      }
     }
+  },
+  "entity": {
+    "sensor": {
+      "battery_level": {
+        "name": "Battery Level"
+      }
+    },
+    "meshtastic": {
+      "channel": {
+        "name": "Channel",
+        "state": {
+          "logging": "Logging",
+          "logbook_missing": "Logbook missing"
+        }
+      },
+      "direct_messages": {
+        "name": "DDDirect Messages",
+        "state": {
+          "logging": "Logging",
+          "logbook_missing": "Logbook missing"
+        }
+      }
+    }
+  },
+  "selector": {
+    "telemetry_type_selector": {
+      "options": {
+        "device_metrics": "Device Metrics",
+        "environment_metrics": "Environment Metrics",
+        "power_metrics": "Power Metrics",
+        "air_quality_metrics": "Air Quality Metrics"
+      }
+    }
+  },
+  "device_automation": {
+    "trigger_type": {
+      "message.received": "Receives Message",
+      "direct_message.received": "Receives Message on {entity_name}",
+      "channel_message.received": "Receives Message on {entity_name}",
+      "message.sent": "Sent Message",
+      "direct_message.sent": "Sent Message to {entity_name}",
+      "channel_message.sent": "Sent Message to {entity_name}"
+    },
+    "action_type": {
+      "send_message": "Send Direct Message",
+      "request_telemetry": "Request Telemetry",
+      "request_position": "Request Position"
+    }
+  },
+  "common": {
+    "service_attr_from_description": "Gateway. If not provided, the best gateway node is chosen automatically."
   }
 }

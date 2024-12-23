@@ -164,6 +164,49 @@ class GatewayChannelEntity(MeshtasticEntity):
         return f"{self._gateway_suggested_id} {self.name}"
 
 
+class GatewayDirectMessageEntity(MeshtasticEntity):
+    _attr_icon = "mdi:message-lock"
+    _attr_name = "Direct Messages"
+    _attr_translation_key = "direct_messages"
+    _attr_has_entity_name = True
+    _attr_should_poll = False
+
+    @staticmethod
+    def build_unique_id(
+        config_entry_id: str, gateway_node: int, device_class: MeshtasticDeviceClass = MeshtasticDeviceClass.MESSAGES
+    ) -> str:
+        return f"{config_entry_id}_{device_class}_{gateway_node}_dm"
+
+    def __init__(
+        self,
+        config_entry_id: str,
+        gateway_node: int,
+        gateway_entity: GatewayEntity,
+        has_logbook: bool = True,  # noqa: FBT001, FBT002
+    ) -> None:
+        super().__init__(config_entry_id, gateway_node, MeshtasticDeviceClass.MESSAGES, "dm")
+        self._gateway_suggested_id = gateway_entity.suggested_object_id
+        self._attr_unique_id = self.build_unique_id(config_entry_id, gateway_node)
+
+        if has_logbook:
+            self._attr_state = "logging"
+        else:
+            self._attr_state = "logbook_missing"
+
+    @property
+    def suggested_object_id(self) -> str | None:
+        return f"{self._gateway_suggested_id} DM"
+
+    @property
+    def name(self) -> str | UndefinedType | None:
+        return super().name
+
+    def _name_internal(
+        self, device_class_name: str | None, platform_translations: dict[str, str]
+    ) -> str | UndefinedType | None:
+        return super()._name_internal(device_class_name, platform_translations)
+
+
 class MeshtasticCoordinatorEntity(CoordinatorEntity[MeshtasticDataUpdateCoordinator]):
     def __init__(self, coordinator: MeshtasticDataUpdateCoordinator) -> None:
         super().__init__(coordinator)
@@ -180,6 +223,15 @@ class MeshtasticCoordinatorEntity(CoordinatorEntity[MeshtasticDataUpdateCoordina
     @abstractmethod
     def _async_update_attrs(self) -> None:
         pass
+
+    @property
+    def name(self) -> str | UndefinedType | None:
+        return super().name
+
+    def _name_internal(
+        self, device_class_name: str | None, platform_translations: dict[str, str]
+    ) -> str | UndefinedType | None:
+        return super()._name_internal(device_class_name, platform_translations)
 
 
 class MeshtasticNodeEntity(MeshtasticCoordinatorEntity, ABC):

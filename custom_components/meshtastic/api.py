@@ -243,11 +243,19 @@ class MeshtasticApiClient:
         self._hass.bus.async_fire(EVENT_MESHTASTIC_API_NODE_UPDATED, event_data)
 
     async def _on_text_message(self, node: MeshNode, packet: Packet) -> None:
+        if packet.to_id == MeshInterface.BROADCAST_NUM:
+            to_channel = packet.channel_index
+            to_node = None
+        else:
+            to_channel = None
+            to_node = packet.to_id
+
         event_data = self._build_event_data(
             node.id,
             {
-                "from": getattr(packet.mesh_packet, "from"),
-                "to": packet.mesh_packet.to,
+                "from": packet.from_id,
+                "to": {"node": to_node, "channel": to_channel},
+                "gateway": self.get_own_node()["num"],
                 "message": packet.app_payload,
             },
         )
