@@ -3,6 +3,7 @@ from __future__ import annotations
 import datetime
 import typing
 from dataclasses import dataclass
+from functools import partial
 from typing import TYPE_CHECKING, Any
 
 from homeassistant.components.sensor import (
@@ -16,10 +17,18 @@ from homeassistant.components.sensor import (
 )
 from homeassistant.config import callback
 from homeassistant.const import (
+    CONCENTRATION_MICROGRAMS_PER_CUBIC_METER,
+    DEGREE,
+    LIGHT_LUX,
     PERCENTAGE,
     SIGNAL_STRENGTH_DECIBELS,
     UnitOfElectricCurrent,
     UnitOfElectricPotential,
+    UnitOfLength,
+    UnitOfMass,
+    UnitOfPressure,
+    UnitOfSpeed,
+    UnitOfTemperature,
     UnitOfTime,
 )
 
@@ -43,6 +52,8 @@ def _build_sensors(nodes: Mapping[int, Mapping[str, Any]], runtime_data: Meshtas
     entities += _build_device_sensors(nodes, runtime_data)
     entities += _build_local_stats_sensors(nodes, runtime_data)
     entities += _build_power_metrics_sensors(nodes, runtime_data)
+    entities += _build_environment_metrics_sensors(nodes, runtime_data)
+    entities += _build_air_quality_metrics_sensors(nodes, runtime_data)
     return entities
 
 
@@ -527,5 +538,143 @@ def _build_power_metrics_sensors(
 
     except:  # noqa: E722
         LOGGER.warning("Failed to create power metrics entities", exc_info=True)
+
+    return entities
+
+
+def _build_environment_metrics_sensors(
+    nodes: Mapping[int, Mapping[str, Any]], runtime_data: MeshtasticData
+) -> Iterable[MeshtasticSensor]:
+    coordinator = runtime_data.coordinator
+    gateway = runtime_data.client.get_own_node()
+    nodes_with_environment_metrics = {
+        node_id: node_info for node_id, node_info in nodes.items() if "environmentMetrics" in node_info
+    }
+    if not nodes_with_environment_metrics:
+        return []
+
+    entities = []
+
+    def environment_metrics_value_fn(key: str) -> Callable[[MeshtasticSensor], str | None]:
+        return lambda device: device.coordinator.data[device.node_id].get("environmentMetrics", {}).get(key, None)
+
+    def add_sensor_base(  # noqa: PLR0913
+        node_id: int,
+        node_info: dict[str, Any],
+        value_key: str,
+        device_class: SensorDeviceClass | None,
+        unit_of_measurement: str | None = None,
+        state_class: SensorStateClass = SensorStateClass.MEASUREMENT,
+    ) -> None:
+        key = "".join(["_" + c.lower() if c.isupper() else c for c in value_key]).lstrip("_")
+        if value_key in node_info["environmentMetrics"]:
+            entities.append(
+                MeshtasticSensor(
+                    coordinator=coordinator,
+                    entity_description=MeshtasticSensorEntityDescription(
+                        key="environment_" + key,
+                        translation_key="environment_" + key,
+                        native_unit_of_measurement=unit_of_measurement,
+                        device_class=device_class,
+                        state_class=state_class,
+                        value_fn=environment_metrics_value_fn(value_key),
+                    ),
+                    gateway=gateway,
+                    node_id=node_id,
+                )
+            )
+
+    try:
+        for node_id, node_info in nodes_with_environment_metrics.items():
+            add_sensor = partial(add_sensor_base, node_id, node_info)
+
+            add_sensor("temperature", SensorDeviceClass.TEMPERATURE, UnitOfTemperature.CELSIUS)
+            add_sensor("relativeHumidity", SensorDeviceClass.HUMIDITY, PERCENTAGE)
+            add_sensor("barometricPressure", SensorDeviceClass.ATMOSPHERIC_PRESSURE, UnitOfPressure.HPA)
+            add_sensor("gasResistance", None, UnitOfPressure.HPA)
+            add_sensor("iaq", SensorDeviceClass.AQI, None)
+
+            add_sensor("distance", SensorDeviceClass.DISTANCE, UnitOfLength.MILLIMETERS)
+
+            add_sensor("lux", SensorDeviceClass.ILLUMINANCE, LIGHT_LUX)
+            add_sensor("white_lux", SensorDeviceClass.ILLUMINANCE, LIGHT_LUX)
+            add_sensor("ir_lux", SensorDeviceClass.ILLUMINANCE, LIGHT_LUX)
+            add_sensor("uv_lux", SensorDeviceClass.ILLUMINANCE, LIGHT_LUX)
+
+            add_sensor("wind_direction", SensorDeviceClass.WIND_SPEED, DEGREE)
+            add_sensor("wind_speed", SensorDeviceClass.WIND_SPEED, UnitOfSpeed.METERS_PER_SECOND)
+            add_sensor("wind_gust", SensorDeviceClass.WIND_SPEED, UnitOfSpeed.METERS_PER_SECOND)
+            add_sensor("wind_lull", SensorDeviceClass.WIND_SPEED, UnitOfSpeed.METERS_PER_SECOND)
+
+            add_sensor("weight", SensorDeviceClass.WEIGHT, UnitOfMass.KILOGRAMS)
+
+    except:  # noqa: E722
+        LOGGER.warning("Failed to create environment metric entities", exc_info=True)
+
+    return entities
+
+
+def _build_air_quality_metrics_sensors(
+    nodes: Mapping[int, Mapping[str, Any]], runtime_data: MeshtasticData
+) -> Iterable[MeshtasticSensor]:
+    coordinator = runtime_data.coordinator
+    gateway = runtime_data.client.get_own_node()
+    nodes_with_environment_metrics = {
+        node_id: node_info for node_id, node_info in nodes.items() if "airQualityMetrics" in node_info
+    }
+    if not nodes_with_environment_metrics:
+        return []
+
+    entities = []
+
+    def air_quality_metrics_value_fn(key: str) -> Callable[[MeshtasticSensor], str | None]:
+        return lambda device: device.coordinator.data[device.node_id].get("airQualityMetrics", {}).get(key, None)
+
+    def add_sensor_base(  # noqa: PLR0913
+        node_id: int,
+        node_info: dict[str, Any],
+        value_key: str,
+        device_class: SensorDeviceClass | None,
+        unit_of_measurement: str | None = None,
+        state_class: SensorStateClass = SensorStateClass.MEASUREMENT,
+    ) -> None:
+        key = "".join(["_" + c.lower() if c.isupper() else c for c in value_key]).lstrip("_")
+        if value_key in node_info["airQualityMetrics"]:
+            entities.append(
+                MeshtasticSensor(
+                    coordinator=coordinator,
+                    entity_description=MeshtasticSensorEntityDescription(
+                        key="airquality_" + key,
+                        translation_key="airquality_" + key,
+                        native_unit_of_measurement=unit_of_measurement,
+                        device_class=device_class,
+                        state_class=state_class,
+                        value_fn=air_quality_metrics_value_fn(value_key),
+                    ),
+                    gateway=gateway,
+                    node_id=node_id,
+                )
+            )
+
+    try:
+        for node_id, node_info in nodes_with_environment_metrics.items():
+            add_sensor = partial(add_sensor_base, node_id, node_info)
+
+            add_sensor("pm10Standard", SensorDeviceClass.PM10, CONCENTRATION_MICROGRAMS_PER_CUBIC_METER)
+            add_sensor("pm25Standard", SensorDeviceClass.PM25, CONCENTRATION_MICROGRAMS_PER_CUBIC_METER)
+            add_sensor("pm100Standard", None, CONCENTRATION_MICROGRAMS_PER_CUBIC_METER)
+
+            add_sensor("pm10Environmental", SensorDeviceClass.PM10, CONCENTRATION_MICROGRAMS_PER_CUBIC_METER)
+            add_sensor("pm25Environmental", SensorDeviceClass.PM25, CONCENTRATION_MICROGRAMS_PER_CUBIC_METER)
+            add_sensor("pm100Environmental", None, CONCENTRATION_MICROGRAMS_PER_CUBIC_METER)
+
+            add_sensor("particles03um", None, CONCENTRATION_MICROGRAMS_PER_CUBIC_METER)
+            add_sensor("particles05um", None, CONCENTRATION_MICROGRAMS_PER_CUBIC_METER)
+            add_sensor("particles10um", SensorDeviceClass.PM10, CONCENTRATION_MICROGRAMS_PER_CUBIC_METER)
+            add_sensor("particles25um", SensorDeviceClass.PM25, CONCENTRATION_MICROGRAMS_PER_CUBIC_METER)
+            add_sensor("particles50um", None, CONCENTRATION_MICROGRAMS_PER_CUBIC_METER)
+            add_sensor("particles100um", None, CONCENTRATION_MICROGRAMS_PER_CUBIC_METER)
+    except:  # noqa: E722
+        LOGGER.warning("Failed to create air quality metric entities", exc_info=True)
 
     return entities
