@@ -23,6 +23,21 @@ CONF_OPTION_FILTER_NODES = "nodes"
 CONF_OPTION_NODE = "node"
 CONF_OPTION_ADD_ANOTHER_NODE = "add_another_node"
 
+CONF_OPTION_NOTIFY_PLATFORM = "notify_platform"
+CONF_OPTION_NOTIFY_PLATFORM_CHANNELS = "channels"
+CONF_OPTION_NOTIFY_PLATFORM_NODES = "nodes"
+
+
+class ConfigOptionNotifyPlatformNodes(enum.StrEnum):
+    NONE = "none"
+    ALL = "all"
+    SELECTED = "selected"
+
+
+CONF_OPTION_NOTIFY_PLATFORM_CHANNELS_DEFAULT = True
+CONF_OPTION_NOTIFY_PLATFORM_NODES_DEFAULT = ConfigOptionNotifyPlatformNodes.ALL
+
+
 SERVICE_SEND_TEXT = "send_text"
 SERVICE_SEND_DIRECT_MESSAGE = "send_direct_message"
 SERVICE_BROADCAST_CHANNEL_MESSAGE = "broadcast_channel_message"

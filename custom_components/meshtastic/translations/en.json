@@ -66,6 +66,17 @@
           "node": "Add Node",
           "add_another_node": "Add another Node"
         }
+      },
+      "notify_platform": {
+        "description": "Home Assistant Notification is the recommended way to send messages to Meshtastic mesh. Configure which parts of the mesh network should be represented in Home Assistant in order to facilitate sending messages.",
+        "data": {
+          "channels": "Create Notification Targets for all Channels",
+          "nodes": "Create Direct Messages Notification Targets for"
+        },
+        "data_description": {
+          "channels": "Create a target / entity for each channel",
+          "nodes": "Note that selecting all nodes can create tens or hundreds of entities in Home Assistant depending on the Meshtastic network size"
+        }
       }
     },
     "error": {
@@ -87,6 +98,20 @@
           "nodes": "Selected Nodes",
           "node": "Add Node",
           "add_another_node": "Add another Node"
+        },
+        "sections": {
+          "notify_platform": {
+            "name": "Notification Platform",
+            "description": "Home Assistant Notification is the recommended way to send messages to Meshtastic mesh. Configure which parts of the mesh network should be represented in Home Assistant in order to facilitate sending messages.",
+            "data": {
+              "channels": "Create Notification Targets for all Channels",
+              "nodes": "Create Direct Messages Notification Targets for"
+            },
+            "data_description": {
+              "channels": "Create a target / entity for each channel",
+              "nodes": "Note that selecting all nodes can create tens or hundreds of entities in Home Assistant depending on the Meshtastic network size"
+            }
+          }
         }
       }
     },
@@ -220,7 +245,7 @@
         }
       },
       "direct_messages": {
-        "name": "DDDirect Messages",
+        "name": "Direct Messages",
         "state": {
           "logging": "Logging",
           "logbook_missing": "Logbook missing"
@@ -235,6 +260,13 @@
         "environment_metrics": "Environment Metrics",
         "power_metrics": "Power Metrics",
         "air_quality_metrics": "Air Quality Metrics"
+      }
+    },
+    "option_notify_platform_node_selector": {
+      "options": {
+        "none": "None of the Nodes",
+        "all": "All known and newly discovered Nodes",
+        "selected": "Only the selected Nodes"
       }
     }
   },

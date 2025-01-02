@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 
 import homeassistant.helpers.config_validation as cv
 import voluptuous as vol
-from homeassistant import config_entries
+from homeassistant import config_entries, data_entry_flow
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError, IntegrationError
 from homeassistant.helpers.selector import (
@@ -28,9 +28,15 @@ from .const import (
     CONF_OPTION_ADD_ANOTHER_NODE,
     CONF_OPTION_FILTER_NODES,
     CONF_OPTION_NODE,
+    CONF_OPTION_NOTIFY_PLATFORM,
+    CONF_OPTION_NOTIFY_PLATFORM_CHANNELS,
+    CONF_OPTION_NOTIFY_PLATFORM_CHANNELS_DEFAULT,
+    CONF_OPTION_NOTIFY_PLATFORM_NODES,
+    CONF_OPTION_NOTIFY_PLATFORM_NODES_DEFAULT,
     CURRENT_CONFIG_VERSION_MAJOR,
     DOMAIN,
     LOGGER,
+    ConfigOptionNotifyPlatformNodes,
     ConnectionType,
 )
 
@@ -46,7 +52,6 @@ if TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry, ConfigFlowResult
     from homeassistant.core import HomeAssistant
     from homeassistant.data_entry_flow import FlowResult
-
 
 _LOGGER = LOGGER.getChild(__name__)
 
@@ -114,6 +119,30 @@ def _build_add_node_schema(
             if node_selection_required
             else vol.Optional(CONF_OPTION_NODE): SelectSelector(SelectSelectorConfig(options=selector_options)),
             vol.Optional(CONF_OPTION_ADD_ANOTHER_NODE): cv.boolean,
+        }
+    )
+
+
+def _build_notify_platform_schema(
+    options: dict[str, Any],
+) -> vol.Schema:
+    node_selector = SelectSelector(
+        SelectSelectorConfig(
+            options=[str(v) for v in ConfigOptionNotifyPlatformNodes],
+            translation_key="option_notify_platform_node_selector",
+        )
+    )
+
+    return vol.Schema(
+        {
+            vol.Required(
+                CONF_OPTION_NOTIFY_PLATFORM_CHANNELS,
+                default=options.get(CONF_OPTION_NOTIFY_PLATFORM_CHANNELS, CONF_OPTION_NOTIFY_PLATFORM_CHANNELS_DEFAULT),
+            ): cv.boolean,
+            vol.Required(
+                CONF_OPTION_NOTIFY_PLATFORM_NODES,
+                default=options.get(CONF_OPTION_NOTIFY_PLATFORM_NODES, CONF_OPTION_NOTIFY_PLATFORM_NODES_DEFAULT),
+            ): node_selector,
         }
     )
 
@@ -408,14 +437,23 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 if user_input.get(CONF_OPTION_ADD_ANOTHER_NODE, False):
                     return await self.async_step_node()
 
-                return self.async_create_entry(
-                    title=self.gateway_node["user"]["longName"], data=self.data, options=self.options
-                )
+                return await self.async_step_notify_platform()
         elif load_nodes:
             _, self.nodes = await validate_input_for_connection(self.hass, self.data, no_nodes=False)
 
         schema = _build_add_node_schema(self.options, self.nodes)
         return self.async_show_form(step_id="node", data_schema=schema, errors=errors)
+
+    async def async_step_notify_platform(self, user_input: dict[str, Any] | None = None) -> FlowResult:
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            self.options[CONF_OPTION_NOTIFY_PLATFORM] = user_input
+            return self.async_create_entry(
+                title=self.gateway_node["user"]["longName"], data=self.data, options=self.options
+            )
+
+        schema = _build_notify_platform_schema(user_input or {})
+        return self.async_show_form(step_id="notify_platform", data_schema=schema, errors=errors)
 
     @staticmethod
     @callback
@@ -440,8 +478,7 @@ class CannotConnectError(HomeAssistantError):
 
 
 class OptionsFlowHandler(config_entries.OptionsFlow):
-    def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
-        self.config_entry = config_entry
+    def __init__(self, config_entry: config_entries.ConfigEntry) -> None:  # noqa: ARG002
         self.options = {}
         self.nodes = None
 
@@ -472,6 +509,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
         already_selected_node_ids = [el["id"] for el in current_filter_node_option]
 
         if user_input is not None:
+            new_data = {}
             updated_filter_node_option = deepcopy(current_filter_node_option)
 
             removed_node_ids = [
@@ -494,15 +532,26 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             if user_input.get(CONF_OPTION_ADD_ANOTHER_NODE, False):
                 self.options[CONF_OPTION_FILTER_NODES] = updated_filter_node_option
                 return await self.async_step_init()
+            new_data[CONF_OPTION_FILTER_NODES] = updated_filter_node_option
+
+            if CONF_OPTION_NOTIFY_PLATFORM in user_input:
+                new_data[CONF_OPTION_NOTIFY_PLATFORM] = user_input[CONF_OPTION_NOTIFY_PLATFORM]
+
             return self.async_create_entry(
                 title="",
-                data={CONF_OPTION_FILTER_NODES: updated_filter_node_option},
+                data=new_data,
             )
 
         selected_nodes = {
             str(node_id): all_nodes.get(str(node_id), f"Unknown (id: {node_id})")
             for node_id in already_selected_node_ids
         }
+
+        notify_options = (
+            self.options[CONF_OPTION_NOTIFY_PLATFORM]
+            if CONF_OPTION_NOTIFY_PLATFORM in self.options
+            else self.config_entry.options.get(CONF_OPTION_NOTIFY_PLATFORM, {})
+        )
         options_schema = vol.Schema(
             {
                 vol.Required(CONF_OPTION_FILTER_NODES, default=list(selected_nodes.keys())): cv.multi_select(
@@ -513,6 +562,9 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     self.nodes,
                     node_selection_required=False,
                 ).schema,
+                vol.Required(CONF_OPTION_NOTIFY_PLATFORM): data_entry_flow.section(
+                    _build_notify_platform_schema(notify_options), {"collapsed": True}
+                ),
             }
         )
         return self.async_show_form(step_id="init", data_schema=options_schema, errors=errors)

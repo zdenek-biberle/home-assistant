@@ -24,13 +24,20 @@ from .const import (
     ATTR_SERVICE_DATA_FROM,
     ATTR_SERVICE_DATA_TO,
     ATTR_SERVICE_SEND_TEXT_DATA_TEXT,
+    CONF_OPTION_FILTER_NODES,
+    CONF_OPTION_NOTIFY_PLATFORM,
+    CONF_OPTION_NOTIFY_PLATFORM_CHANNELS,
+    CONF_OPTION_NOTIFY_PLATFORM_CHANNELS_DEFAULT,
+    CONF_OPTION_NOTIFY_PLATFORM_NODES,
+    CONF_OPTION_NOTIFY_PLATFORM_NODES_DEFAULT,
     DOMAIN,
     LOGGER,
     SERVICE_SEND_TEXT,
+    ConfigOptionNotifyPlatformNodes,
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Callable, Mapping
 
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import Event, HomeAssistant, _DataT
@@ -39,6 +46,24 @@ if TYPE_CHECKING:
     from homeassistant.helpers.entity_registry import EntityRegistry
 
     from .data import MeshtasticConfigEntry
+
+
+def _create_node_entity_filter_factory(config_entry: MeshtasticConfigEntry) -> Callable[[int], bool]:
+    create_nodes = config_entry.options.get(CONF_OPTION_NOTIFY_PLATFORM, {}).get(
+        CONF_OPTION_NOTIFY_PLATFORM_NODES, CONF_OPTION_NOTIFY_PLATFORM_NODES_DEFAULT
+    )
+    if create_nodes == ConfigOptionNotifyPlatformNodes.NONE:
+        return lambda _: False
+
+    if create_nodes == ConfigOptionNotifyPlatformNodes.ALL:
+        return lambda _: True
+
+    if create_nodes == ConfigOptionNotifyPlatformNodes.SELECTED:
+        filter_nodes = config_entry.options.get(CONF_OPTION_FILTER_NODES, [])
+        filter_node_nums = [el["id"] for el in filter_nodes]
+        return lambda node_id: node_id in filter_node_nums
+
+    raise ValueError
 
 
 async def async_setup_entry(
@@ -51,6 +76,8 @@ async def async_setup_entry(
     await _add_node_entities(hass, config_entry, platform, entity_registry, async_add_entities)
     await _add_channel_entities(hass, config_entry, platform, entity_registry, async_add_entities)
 
+    should_create_node = _create_node_entity_filter_factory(config_entry)
+
     @callback
     def _api_node_updated(event: Event[_DataT]) -> None:
         event_data = deepcopy(event.data)
@@ -59,6 +86,9 @@ async def async_setup_entry(
             return
         node_id = event_data.get(ATTR_EVENT_MESHTASTIC_API_NODE, None)
         node_info = event_data.get(ATTR_EVENT_MESHTASTIC_API_DATA, None)
+
+        if not should_create_node(node_id):
+            return
 
         if "user" not in node_info or "longName" not in node_info["user"]:
             return
@@ -86,10 +116,12 @@ async def _add_node_entities(
     entity_registry: EntityRegistry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
+    should_create_node = _create_node_entity_filter_factory(config_entry)
     nodes = await config_entry.runtime_data.client.async_get_all_nodes()
     entities = [
         MeshtasticNodeNotify(node_id=node_id, entity_name=f"{node_info["user"]["longName"]}")
         for node_id, node_info in nodes.items()
+        if should_create_node(node_id)
     ]
     platform = entity_platform.async_get_current_platform()
     entity_registry = er.async_get(hass)
@@ -103,7 +135,8 @@ async def _add_node_entities(
             if existing_entity.name != e.name:
                 existing_entity.update_from(e)
                 entity_registry.async_update_entity(registered_entity_id, name=e.name)
-    async_add_entities(new_entities)
+    if new_entities:
+        async_add_entities(new_entities)
 
 
 def _channel_global_id(channel: Mapping[str, Any]) -> str:
@@ -119,6 +152,13 @@ async def _add_channel_entities(
     entity_registry: EntityRegistry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
+    if not (
+        config_entry.options.get(CONF_OPTION_NOTIFY_PLATFORM, {}).get(
+            CONF_OPTION_NOTIFY_PLATFORM_CHANNELS, CONF_OPTION_NOTIFY_PLATFORM_CHANNELS_DEFAULT
+        )
+    ):
+        return
+
     gateway = await config_entry.runtime_data.client.async_get_own_node()
     channels = await config_entry.runtime_data.client.async_get_channels()
     entities = [
@@ -136,7 +176,9 @@ async def _add_channel_entities(
         else:
             existing_entity = platform.domain_entities[registered_entity_id]
             existing_entity.update_from(e)
-    async_add_entities(new_entities)
+
+    if new_entities:
+        async_add_entities(new_entities)
 
 
 async def async_unload_entry(
