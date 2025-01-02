@@ -875,6 +875,7 @@ class MeshInterface:
         expect_response: bool = True,
     ) -> Packet[admin_pb2.AdminMessage]:
         if node is None:
+            await self._connected_node_ready.wait()
             node = self._connected_node_info.my_node_num
         return await self._send_message_await_response(
             node=node,
