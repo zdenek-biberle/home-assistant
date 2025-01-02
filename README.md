@@ -111,7 +111,59 @@ it is still busy with receiving / sending other mesh messages.
 ```
 
 </details>
+<details>
+<summary>Handling incoming text messages from any node</summary>
 
+This integration supports the creation of Home Assistant automations that can handle incoming text messages from any public node and replay to these messages. This is useful if to want to reply to incoming direct messages with a standard message, use a LLM or handle various commands with automations.
+
+To do this, create a new Home Assistant automation that triggers on "Manual Events" and put `meshtastic_api_text_message` as the "Event Type". This will cause this automation to get triggerred on all incoming channel and direct messages. You will get events that include this information:
+
+```yaml
+trigger:
+  event:
+    event_type: meshtastic_api_text_message
+    data:
+      data:
+        from: 1127918844
+        to:
+          node: null
+          channel: 0
+        message: Sample Message
+```
+
+From is the NodeID of the sender of the message, to will have a node value if direct, or a channel number if the message is directed at the channel. You can create conditions in the automation to filter out the incoming messages you want, for example to filter out messages addressed to your node, use this condition with your nodeid.
+
+```
+{{ trigger.event.data.data.to.node == 862525748 }}
+```
+
+To filter out messages addresses at the primary channel (Channel 0 is typically LONGFAST), use this condition:
+
+```
+{{ trigger.event.data.data.to.channel == 0 }}
+```
+
+You can also forward these messages as notifications to your phone, etc. For example:
+
+```
+Meshtastic message from ({{ trigger.event.data.data.from }}): {{ trigger.event.data.data.message }}
+```
+
+To reply to a text message in this situation, add a 2 second or more delay action and then an action called `Meshtastic 'Send Text'` to your automation. You need to add a short delay to make sure your Meshtastic device is idle before replying. Change the `Meshtastic 'Send Text'` action to edit in yaml and change the `to`, `from` and `text` values to somethign like his:
+
+```
+action: meshtastic.send_text
+metadata: {}
+data:
+  ack: false
+  to: "{{ trigger.event.data.data.from }}"
+  from: "{{ trigger.event.data.data.to.node }}"
+  text: "ECHO: {{ trigger.event.data.data.message }}"
+```
+
+In the example above, we echo back an incoming direct message.
+
+</details>
 
 ### [Logbook](https://www.home-assistant.io/integrations/logbook/)
 
