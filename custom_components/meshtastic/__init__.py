@@ -7,6 +7,7 @@ https://github.com/broglep/homeassistant-meshtastic
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import datetime
 from collections import defaultdict
@@ -279,15 +280,19 @@ async def async_unload_entry(
     hass: HomeAssistant,
     entry: MeshtasticConfigEntry,
 ) -> bool:
+    # ensure that we disconnect first to prevent later issues with duplicate connection in case of errors
+    try:
+        if entry.runtime_data and entry.runtime_data.client:
+            await entry.runtime_data.client.disconnect()
+    except:  # noqa: E722
+        LOGGER.warning("Failed to disconnect client during unload of entry", exc_info=True)
+
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unload_ok:
         for entity in [
             e for e in hass.data[DATA_COMPONENT].entities if e.registry_entry.config_entry_id == entry.entry_id
         ]:
             await hass.data[DATA_COMPONENT].async_remove_entity(entity.entity_id)
-
-        if entry.runtime_data and entry.runtime_data.client:
-            await entry.runtime_data.client.disconnect()
 
         await services.async_unregister_gateway(hass, entry)
 
@@ -297,14 +302,23 @@ async def async_unload_entry(
     return unload_ok
 
 
+_reload_lock = asyncio.Lock()
+
+
 async def async_reload_entry(
     hass: HomeAssistant,
     entry: MeshtasticConfigEntry,
 ) -> None:
-    if config_entries.current_entry.get() is None:
-        config_entries.current_entry.set(entry)
-    await async_unload_entry(hass, entry)
-    await async_setup_entry(hass, entry)
+    async with _reload_lock:
+        token = None
+        if config_entries.current_entry.get() is None:
+            token = config_entries.current_entry.set(entry)
+        try:
+            await async_unload_entry(hass, entry)
+            await async_setup_entry(hass, entry)
+        finally:
+            if token:
+                config_entries.current_entry.reset(token)
 
 
 async def async_migrate_entry(hass: HomeAssistant, config_entry: MeshtasticConfigEntry) -> bool:
