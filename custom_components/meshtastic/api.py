@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 from copy import deepcopy
 from datetime import timedelta
 from enum import StrEnum
@@ -131,22 +132,28 @@ class MeshtasticApiClient:
 
     async def connect(self) -> None:
         try:
-            await self._interface.start()
-            await asyncio.wait_for(self._interface.connected_node_ready(), timeout=30)
-
-            self._packet_processor = asyncio.create_task(self._process_meshtastic_packet())
-
-            async def send_time() -> None:
-                await asyncio.sleep(1)
-                try:
-                    await self._interface.send_time()
-                    await self._interface.write_timezone_if_needed()
-                except:  # noqa: E722
-                    self._logger.debug("Send time failed", exc_info=True)
-
-            self._add_background_task(send_time())
+            await asyncio.wait_for(self._interface.start(), timeout=30)
         except Exception as e:
             raise MeshtasticApiClientCommunicationError from e
+
+        try:
+            await asyncio.wait_for(self._interface.connected_node_ready(), timeout=30)
+        except Exception as e:
+            with contextlib.suppress(Exception):
+                await self._interface.stop()
+            raise MeshtasticApiClientCommunicationError from e
+
+        self._packet_processor = asyncio.create_task(self._process_meshtastic_packet())
+
+        async def send_time() -> None:
+            await asyncio.sleep(1)
+            try:
+                await self._interface.send_time()
+                await self._interface.write_timezone_if_needed()
+            except:  # noqa: E722
+                self._logger.debug("Send time failed", exc_info=True)
+
+        self._add_background_task(send_time())
 
     async def disconnect(self) -> None:
         try:
