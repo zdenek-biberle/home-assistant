@@ -145,7 +145,7 @@ it is still busy with receiving / sending other mesh messages.
 ```yaml
 - id: '1735852176270'
   alias: Echo on Channel Message (without Notify Platform)
-  description: 'Only from gateway with node id 3771721320'
+  description: 'Only from gateway with node id 3771721320 and channel 0'
   triggers:
   - trigger: event
     event_type: meshtastic_api_text_message
@@ -153,7 +153,7 @@ it is still busy with receiving / sending other mesh messages.
       data:
         to:
           node:
-          channel: 1
+          channel: 0
         gateway: 3771721320
   conditions: []
   actions:
