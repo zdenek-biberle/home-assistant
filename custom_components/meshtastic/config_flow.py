@@ -281,6 +281,8 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             # extract unique id from existing config entry (so that we don't need to connect to node to get node id
             # and might be interrupting the connection)
             await self.async_set_unique_id(matching_entry.unique_id)
+        else:
+            await self.async_set_unique_id(discovery_info.address)
 
         self._abort_if_unique_id_configured()
 
@@ -340,6 +342,8 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             # extract unique id from existing config entry (so that we don't need to connect to node to get node id
             # and might be interrupting the connection)
             await self.async_set_unique_id(matching_entry.unique_id)
+        else:
+            await self.async_set_unique_id(discovery_info.host)
 
         self._abort_if_unique_id_configured()
 
@@ -389,6 +393,8 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             # extract unique id from existing config entry (so that we don't need to connect to node to get node id
             # and might be interrupting the connection)
             await self.async_set_unique_id(matching_entry.unique_id)
+        else:
+            await self.async_set_unique_id(discovery_info.device)
 
         self._abort_if_unique_id_configured()
 
