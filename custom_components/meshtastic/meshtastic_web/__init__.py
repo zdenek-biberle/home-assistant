@@ -9,7 +9,7 @@ from urllib.parse import urlencode
 import homeassistant.helpers.entity_registry as er
 from aiohttp import web
 from google.protobuf import message
-from homeassistant.components.http import HomeAssistantRequest, HomeAssistantView
+from homeassistant.components.http import HomeAssistantRequest, HomeAssistantView, StaticPathConfig
 from homeassistant.config_entries import ConfigEntry, ConfigEntryState
 from homeassistant.core import HomeAssistant
 
@@ -207,7 +207,9 @@ async def async_setup(hass: HomeAssistant) -> bool:
         hass.http.register_view(MeshtasticWebApiHotspot())
         hass.http.register_view(MeshtasticWebApiV1FromRadioView(hass, _api_context))
         hass.http.register_view(MeshtasticWebApiV1ToRadioView(hass, _api_context))
-        hass.http.register_static_path(f"{URL_BASE}/web", str(Path(__file__).parent / "static"))
+        await hass.http.async_register_static_paths(
+            [StaticPathConfig(f"{URL_BASE}/web", str(Path(__file__).parent / "static"))]
+        )
     except Exception:  # noqa: BLE001
         _LOGGER.warning("Failed to setup meshtastic web")
         return False
