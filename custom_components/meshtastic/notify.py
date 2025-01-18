@@ -93,7 +93,7 @@ async def async_setup_entry(
         if "user" not in node_info or "longName" not in node_info["user"]:
             return
 
-        entity = MeshtasticNodeNotify(node_id=node_id, entity_name=f"{node_info["user"]["longName"]}")
+        entity = MeshtasticNodeNotify(node_id=node_id, entity_name=f"{node_info['user']['longName']}")
         registered_entity_id = entity_registry.async_get_entity_id(
             platform.domain, platform.platform_name, entity.unique_id
         )
@@ -119,7 +119,7 @@ async def _add_node_entities(
     should_create_node = _create_node_entity_filter_factory(config_entry)
     nodes = await config_entry.runtime_data.client.async_get_all_nodes()
     entities = [
-        MeshtasticNodeNotify(node_id=node_id, entity_name=f"{node_info["user"]["longName"]}")
+        MeshtasticNodeNotify(node_id=node_id, entity_name=f"{node_info['user']['longName']}")
         for node_id, node_info in nodes.items()
         if should_create_node(node_id)
     ]

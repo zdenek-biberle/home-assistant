@@ -106,7 +106,7 @@ def _build_add_node_schema(
     selector_options = [
         SelectOptionDict(
             value=str(node_id),
-            label=f"{node_info["user"]["longName"]} ({node_info["user"]["id"]})",
+            label=f"{node_info['user']['longName']} ({node_info['user']['id']})",
         )
         for node_id, node_info in sorted(
             selectable_nodes.items(),
