@@ -1,6 +1,7 @@
 import asyncio  # noqa: D104
 import contextlib
 import datetime
+from collections import defaultdict
 from pathlib import Path
 from typing import cast
 from urllib.parse import urlencode
@@ -11,8 +12,6 @@ from google.protobuf import message
 from homeassistant.components.http import HomeAssistantRequest, HomeAssistantView
 from homeassistant.config_entries import ConfigEntry, ConfigEntryState
 from homeassistant.core import HomeAssistant
-from pydantic.utils import defaultdict
-
 
 from ..aiomeshtastic.connection import ClientApiConnection  # noqa: TID252
 from ..aiomeshtastic.protobuf import mesh_pb2  # noqa: TID252
