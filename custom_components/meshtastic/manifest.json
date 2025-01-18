@@ -6,7 +6,8 @@
     "bluetooth_adapters",
     "zeroconf",
     "usb",
-    "logbook"
+    "logbook",
+    "http"
   ],
   "bluetooth": [
     {

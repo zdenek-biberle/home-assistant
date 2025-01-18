@@ -19,6 +19,7 @@ Supported Features:
  * Record node position (as device tracker)
  * Device triggers & actions for automations
  * Various other service actions (e.g. request metrics, trace route)
+ * Bundled meshtastic web client for manual interaction with gateway
 
 For more details, see check the [documentation](#documentation).
 
@@ -268,6 +269,32 @@ node is at home or away.
 Use the available actions if you need more control compared to other methods to interact with
 meshtastic devices. Certain actions need you to understand meshtastic details and are not recommended 
 for the average user. 
+
+## [Meshtastic Web Client](https://meshtastic.org/docs/software/web-client/)
+
+In order to enable manual interaction with gateway nodes and because of the limitation of meshtastic firmware
+that only allows one single connection, this integration offers a workaround by exposing a meshtastic client http api
+for each configured gateway. The bundled meshtastic web client can then be connected
+to this integration directly and the integration will act as a proxy.
+
+This also has the added benefit that it allows you to connect to meshtastic devices via the web client
+that are not connected via TCP (like serial or bluetooth) or don't support TCP at all (e.g. nRF based nodes).
+
+**Security Note**: As a side effect, enabling this feature results in unauthenticated access to your gateway nodes for 
+anyone that can reach your home assistant instance (because meshtastic does not support authentication on the http api).
+Make sure to only use this feature if your home assistant instance is running in a trusted environment!
+
+To access the web client, perform the following steps:
+
+In Home Assistant:
+1. Enable the feature in the integration configuration
+2. Navigate to the "Meshtastic" menu item. If you don't see it, reload home assistant interface
+3. Press the "Open" button of the desired gateway to launch the web client
+
+Inside the Meshtastic Web Client:
+
+4. Press "New Connection" - the correct hostname is already populated
+5. Press "Connect"
 
 ## Contributions are welcome!
 

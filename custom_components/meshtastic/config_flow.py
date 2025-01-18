@@ -14,7 +14,7 @@ from homeassistant.helpers.selector import (
     SelectSelectorConfig,
 )
 
-from . import CURRENT_CONFIG_VERSION_MINOR
+from . import CONF_OPTION_WEB_CLIENT, CURRENT_CONFIG_VERSION_MINOR
 from .aiomeshtastic import TcpConnection
 from .api import (
     MeshtasticApiClient,
@@ -33,6 +33,8 @@ from .const import (
     CONF_OPTION_NOTIFY_PLATFORM_CHANNELS_DEFAULT,
     CONF_OPTION_NOTIFY_PLATFORM_NODES,
     CONF_OPTION_NOTIFY_PLATFORM_NODES_DEFAULT,
+    CONF_OPTION_WEB_CLIENT_ENABLE,
+    CONF_OPTION_WEB_CLIENT_ENABLE_DEFAULT,
     CURRENT_CONFIG_VERSION_MAJOR,
     DOMAIN,
     LOGGER,
@@ -143,6 +145,19 @@ def _build_notify_platform_schema(
                 CONF_OPTION_NOTIFY_PLATFORM_NODES,
                 default=options.get(CONF_OPTION_NOTIFY_PLATFORM_NODES, CONF_OPTION_NOTIFY_PLATFORM_NODES_DEFAULT),
             ): node_selector,
+        }
+    )
+
+
+def _build_meshtastic_web_schema(
+    options: dict[str, Any],
+) -> vol.Schema:
+    return vol.Schema(
+        {
+            vol.Required(
+                CONF_OPTION_WEB_CLIENT_ENABLE,
+                default=options.get(CONF_OPTION_WEB_CLIENT_ENABLE, CONF_OPTION_WEB_CLIENT_ENABLE_DEFAULT),
+            ): cv.boolean
         }
     )
 
@@ -454,12 +469,24 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         errors: dict[str, str] = {}
         if user_input is not None:
             self.options[CONF_OPTION_NOTIFY_PLATFORM] = user_input
-            return self.async_create_entry(
-                title=self.gateway_node["user"]["longName"], data=self.data, options=self.options
-            )
+            return await self.async_step_web_client()
 
         schema = _build_notify_platform_schema(user_input or {})
         return self.async_show_form(step_id="notify_platform", data_schema=schema, errors=errors)
+
+    async def async_step_web_client(self, user_input: dict[str, Any] | None = None) -> FlowResult:
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            self.options[CONF_OPTION_WEB_CLIENT] = user_input
+            return await self._finish_steps()
+
+        schema = _build_meshtastic_web_schema(user_input or {})
+        return self.async_show_form(step_id="web_client", data_schema=schema, errors=errors)
+
+    async def _finish_steps(self) -> ConfigFlowResult:
+        return self.async_create_entry(
+            title=self.gateway_node["user"]["longName"], data=self.data, options=self.options
+        )
 
     @staticmethod
     @callback
@@ -543,6 +570,9 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             if CONF_OPTION_NOTIFY_PLATFORM in user_input:
                 new_data[CONF_OPTION_NOTIFY_PLATFORM] = user_input[CONF_OPTION_NOTIFY_PLATFORM]
 
+            if CONF_OPTION_WEB_CLIENT in user_input:
+                new_data[CONF_OPTION_WEB_CLIENT] = user_input[CONF_OPTION_WEB_CLIENT]
+
             return self.async_create_entry(
                 title="",
                 data=new_data,
@@ -558,6 +588,11 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             if CONF_OPTION_NOTIFY_PLATFORM in self.options
             else self.config_entry.options.get(CONF_OPTION_NOTIFY_PLATFORM, {})
         )
+        webclient_options = (
+            self.options[CONF_OPTION_WEB_CLIENT]
+            if CONF_OPTION_WEB_CLIENT in self.options
+            else self.config_entry.options.get(CONF_OPTION_WEB_CLIENT, {})
+        )
         options_schema = vol.Schema(
             {
                 vol.Required(CONF_OPTION_FILTER_NODES, default=list(selected_nodes.keys())): cv.multi_select(
@@ -570,6 +605,9 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 ).schema,
                 vol.Required(CONF_OPTION_NOTIFY_PLATFORM): data_entry_flow.section(
                     _build_notify_platform_schema(notify_options), {"collapsed": True}
+                ),
+                vol.Required(CONF_OPTION_WEB_CLIENT): data_entry_flow.section(
+                    _build_meshtastic_web_schema(webclient_options), {"collapsed": True}
                 ),
             }
         )

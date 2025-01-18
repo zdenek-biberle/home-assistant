@@ -37,6 +37,10 @@ class ConfigOptionNotifyPlatformNodes(enum.StrEnum):
 CONF_OPTION_NOTIFY_PLATFORM_CHANNELS_DEFAULT = True
 CONF_OPTION_NOTIFY_PLATFORM_NODES_DEFAULT = ConfigOptionNotifyPlatformNodes.ALL
 
+CONF_OPTION_WEB_CLIENT = "web_client"
+CONF_OPTION_WEB_CLIENT_ENABLE = "enable"
+CONF_OPTION_WEB_CLIENT_ENABLE_DEFAULT = False
+
 
 SERVICE_SEND_TEXT = "send_text"
 SERVICE_SEND_DIRECT_MESSAGE = "send_direct_message"
@@ -102,3 +106,5 @@ class MeshtasticDomainMessageLogEventData(TypedDict):
 
 # Event used for logbook
 EVENT_MESHTASTIC_DOMAIN_MESSAGE_LOG: EventType[MeshtasticDomainMessageLogEventData] = EventType(f"{DOMAIN}_message_log")
+
+URL_BASE = "/meshtastic"

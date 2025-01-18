@@ -30,7 +30,7 @@ from homeassistant.helpers.entity_component import EntityComponent
 from homeassistant.helpers.typing import UNDEFINED, ConfigType
 from homeassistant.loader import async_get_loaded_integration
 
-from . import services
+from . import frontend, meshtastic_web, services
 from .api import (
     MeshtasticApiClient,
 )
@@ -39,6 +39,9 @@ from .const import (
     CONF_CONNECTION_TCP_PORT,
     CONF_CONNECTION_TYPE,
     CONF_OPTION_FILTER_NODES,
+    CONF_OPTION_WEB_CLIENT,
+    CONF_OPTION_WEB_CLIENT_ENABLE,
+    CONF_OPTION_WEB_CLIENT_ENABLE_DEFAULT,
     CURRENT_CONFIG_VERSION_MAJOR,
     CURRENT_CONFIG_VERSION_MINOR,
     DOMAIN,
@@ -83,6 +86,21 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     return True
 
 
+async def async_setup_meshtastic_web(hass: HomeAssistant) -> bool:
+    if hass.data[DOMAIN].config.get("meshtastic_web_loaded", False):
+        return True
+
+    try:
+        await meshtastic_web.async_setup(hass)
+        await frontend.async_register_frontend(hass)
+        hass.data[DOMAIN].config["meshtastic_web_loaded"] = True
+    except:  # noqa: E722
+        LOGGER.warning("Failed to setup frontend", exc_info=True)
+        return False
+    else:
+        return True
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: MeshtasticConfigEntry,
@@ -120,6 +138,12 @@ async def async_setup_entry(
     # listeners
     cancel_message_logger = await async_setup_message_logger(hass, entry)
     _remove_listeners[entry.entry_id].append(cancel_message_logger)
+
+    if entry.options.get(CONF_OPTION_WEB_CLIENT, {}).get(
+        CONF_OPTION_WEB_CLIENT_ENABLE, CONF_OPTION_WEB_CLIENT_ENABLE_DEFAULT
+    ):
+        await async_setup_meshtastic_web(hass)
+
     return True
 
 
