@@ -8,8 +8,7 @@ import bleak
 from bleak import BaseBleakClient, BleakClient, BleakGATTCharacteristic
 from google.protobuf import message
 
-from meshtastic.protobuf import mesh_pb2
-
+from ..protobuf import mesh_pb2  # noqa: TID252
 from . import ClientApiConnection
 from .errors import (
     ClientApiConnectionError,

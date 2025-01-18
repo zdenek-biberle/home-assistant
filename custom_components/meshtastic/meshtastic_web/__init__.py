@@ -13,9 +13,9 @@ from homeassistant.config_entries import ConfigEntry, ConfigEntryState
 from homeassistant.core import HomeAssistant
 from pydantic.utils import defaultdict
 
-from meshtastic.protobuf import mesh_pb2
 
 from ..aiomeshtastic.connection import ClientApiConnection  # noqa: TID252
+from ..aiomeshtastic.protobuf import mesh_pb2  # noqa: TID252
 from ..api import MeshtasticApiClient  # noqa: TID252
 from ..const import (  # noqa: TID252
     CONF_OPTION_WEB_CLIENT,

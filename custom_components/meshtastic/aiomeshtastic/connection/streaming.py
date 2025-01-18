@@ -4,8 +4,7 @@ from collections.abc import AsyncIterable
 
 from google.protobuf import message
 
-from meshtastic.protobuf import mesh_pb2
-
+from ..protobuf import mesh_pb2  # noqa: TID252
 from . import (
     ClientApiConnection,
     ClientApiConnectionError,

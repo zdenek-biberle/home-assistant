@@ -23,8 +23,7 @@ from homeassistant.helpers.selector import (
     SelectSelectorConfig,
 )
 
-from meshtastic import BROADCAST_ADDR
-
+from .aiomeshtastic import MeshInterface
 from .aiomeshtastic.interface import TelemetryType
 from .api import MeshtasticApiClient
 from .const import (
@@ -222,7 +221,7 @@ async def _build_default_handler(  # noqa: PLR0915
                 elif to.isalnum():
                     to = int(_convert_device_id_to_node_id(to))
             else:
-                to = BROADCAST_ADDR
+                to = MeshInterface.BROADCAST_ADDR
 
             if ATTR_SERVICE_DATA_CHANNEL in call.data:
                 channel = call.data[ATTR_SERVICE_DATA_CHANNEL]

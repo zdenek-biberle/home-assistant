@@ -19,7 +19,15 @@ from typing import (
 import google
 from google.protobuf.message import Message
 
-from meshtastic.protobuf import (
+from .connection import (
+    ClientApiConnection,
+    ClientApiConnectionPacketStreamListener,
+    ClientApiNotConnectedError,
+)
+from .const import LOGGER, UNDEFINED
+from .errors import MeshInterfaceRequestError, MeshRoutingError, MeshtasticError
+from .packet import DatabaseNodeInfoPacket, FullNodeInfoPacket, Packet
+from .protobuf import (
     admin_pb2,
     channel_pb2,
     config_pb2,
@@ -30,16 +38,7 @@ from meshtastic.protobuf import (
     portnums_pb2,
     telemetry_pb2,
 )
-from meshtastic.protobuf.mesh_pb2 import MeshPacket
-
-from .connection import (
-    ClientApiConnection,
-    ClientApiConnectionPacketStreamListener,
-    ClientApiNotConnectedError,
-)
-from .const import LOGGER, UNDEFINED
-from .errors import MeshInterfaceRequestError, MeshRoutingError, MeshtasticError
-from .packet import DatabaseNodeInfoPacket, FullNodeInfoPacket, Packet
+from .protobuf.mesh_pb2 import MeshPacket
 
 
 class MeshInterfaceError(MeshtasticError):

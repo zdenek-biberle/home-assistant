@@ -1,4 +1,4 @@
-from meshtastic.protobuf import mesh_pb2
+from .protobuf import mesh_pb2
 
 
 class MeshtasticError(Exception):

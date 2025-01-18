@@ -3,7 +3,7 @@ from collections.abc import AsyncIterable
 from types import TracebackType
 from typing import Self
 
-from meshtastic.protobuf import mesh_pb2
+from ..protobuf import mesh_pb2  # noqa: TID252
 
 
 class ClientApiConnectionPacketStreamListener:

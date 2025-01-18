@@ -11,9 +11,6 @@ import google
 from google.protobuf.json_format import MessageToDict
 from homeassistant.exceptions import IntegrationError
 
-from meshtastic import BROADCAST_ADDR
-from meshtastic.protobuf import portnums_pb2
-
 from .aiomeshtastic import (
     BluetoothConnection as AioBluetoothConnection,
 )
@@ -30,6 +27,7 @@ from .aiomeshtastic import (
     TcpConnection as AioTcpConnection,
 )
 from .aiomeshtastic.errors import MeshRoutingError, MeshtasticError
+from .aiomeshtastic.protobuf import portnums_pb2
 from .const import (
     CONF_CONNECTION_BLUETOOTH_ADDRESS,
     CONF_CONNECTION_SERIAL_PORT,
@@ -198,7 +196,7 @@ class MeshtasticApiClient:
     async def send_text(
         self,
         text: str,
-        destination_id: int | str = BROADCAST_ADDR,
+        destination_id: int | str = MeshInterface.BROADCAST_ADDR,
         *,
         want_ack: bool = False,
         channel_index: int | None = None,

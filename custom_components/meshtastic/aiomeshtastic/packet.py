@@ -4,9 +4,8 @@ from typing import Any, Optional, TypeVar
 
 import google
 
-from meshtastic.protobuf import admin_pb2, mesh_pb2, portnums_pb2, telemetry_pb2
-
 from .const import LOGGER
+from .protobuf import admin_pb2, mesh_pb2, portnums_pb2, telemetry_pb2
 
 T = TypeVar("T", None, mesh_pb2.Routing, telemetry_pb2.Telemetry, admin_pb2.AdminMessage, str)
 

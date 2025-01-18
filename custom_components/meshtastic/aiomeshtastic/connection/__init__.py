@@ -10,10 +10,8 @@ from types import TracebackType
 import google
 from google.protobuf.message import Message
 
-from meshtastic.protobuf import mesh_pb2, portnums_pb2
-from meshtastic.protobuf.mesh_pb2 import MeshPacket
-
 from ..packet import Packet  # noqa: TID252
+from ..protobuf import mesh_pb2, portnums_pb2  # noqa: TID252
 from .errors import (
     ClientApiConnectFailedError,
     ClientApiConnectionError,
@@ -243,7 +241,7 @@ class ClientApiConnection:
         to_node: int,
         message: google.protobuf.message.Message | bytes,
         port_num: portnums_pb2.PortNum.ValueType = portnums_pb2.PortNum.PRIVATE_APP,
-        priority: MeshPacket.Priority = MeshPacket.Priority.DEFAULT,
+        priority: mesh_pb2.MeshPacket.Priority = mesh_pb2.MeshPacket.Priority.DEFAULT,
         channel_index: int | None = None,
         *,
         from_node: int | None = None,
