@@ -26,6 +26,7 @@ from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers.device_registry import DeviceConnectionCollisionError
 from homeassistant.helpers.entity_component import EntityComponent
 from homeassistant.helpers.typing import UNDEFINED, ConfigType
 from homeassistant.loader import async_get_loaded_integration
@@ -250,11 +251,20 @@ async def _setup_meshtastic_device(  # noqa: PLR0913
         if gateway_node["num"] == node_id and client.metadata
         else None,
     )
-    device_registry.async_update_device(
-        d.id,
-        new_connections=connections,
-        via_device_id=None if via_device is None else UNDEFINED,
-    )
+    try:
+        device_registry.async_update_device(
+            d.id,
+            new_connections=connections,
+            via_device_id=None if via_device is None else UNDEFINED,
+        )
+    except DeviceConnectionCollisionError as e:
+        LOGGER.debug("Conflict with other device connections, only using meshtastic connections. %s", e)
+        own_connections = {(k, v) for k, v in connections if k == DOMAIN}
+        device_registry.async_update_device(
+            d.id,
+            new_connections=own_connections,
+            via_device_id=None if via_device is None else UNDEFINED,
+        )
 
 
 async def _setup_meshtastic_entities(
