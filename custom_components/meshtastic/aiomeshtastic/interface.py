@@ -5,7 +5,6 @@ import enum
 import functools
 import itertools
 import random
-import ssl
 from collections import defaultdict, deque
 from collections.abc import AsyncIterator, Awaitable, Callable, Mapping, MutableMapping
 from dataclasses import dataclass
@@ -16,6 +15,8 @@ from typing import (
     Optional,
     Self,
 )
+
+from homeassistant.util.ssl import get_default_context
 
 try:
     import aiomqtt
@@ -408,9 +409,6 @@ class MeshInterface:
         password = mqtt_config.password
         use_tls = mqtt_config.tls_enabled
 
-        # Set up SSL context if TLS is enabled
-        ssl_context = ssl.create_default_context()
-
         # Parse broker address
         hostname = broker.split(":", 1)[0]
         port = int(broker.split(":", 1)[1]) if ":" in broker else 1883
@@ -427,7 +425,7 @@ class MeshInterface:
             "port": port,
             "username": username or None,
             "password": password or None,
-            "tls_context": ssl_context if use_tls else None,
+            "tls_context": get_default_context() if use_tls else None,
             "identifier": client_id,
         }
 
