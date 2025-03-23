@@ -17,9 +17,14 @@ from typing import (
     Self,
 )
 
-import aiomqtt
+try:
+    import aiomqtt
+    from aiomqtt import MqttError
+
+    _has_aiomqtt = True
+except ImportError:
+    _has_aiomqtt = False
 import google
-from aiomqtt import MqttError
 from google.protobuf.message import Message
 
 from .connection import (
@@ -118,6 +123,7 @@ class MeshInterface:
         heartbeat_interval: datetime.timedelta | None = None,
         acknowledgement_timeout: datetime.timedelta | None = None,
         response_timeout: datetime.timedelta | None = None,
+        enable_mqtt_proxy: bool = True,
     ) -> None:
         self._logger = LOGGER.getChild(self.__class__.__name__)
         self._connection = connection
@@ -160,10 +166,16 @@ class MeshInterface:
         self._previous_reconnects = deque(maxlen=10)
 
         # MQTT client for persistent connection
-        self._mqtt_client = None
-        self._mqtt_connected = False
-        self._mqtt_connection_task = None
-        self._mqtt_config = None
+        self._mqtt_proxy_enabled = enable_mqtt_proxy
+        if self._mqtt_proxy_enabled and not _has_aiomqtt:
+            self._logger.warning("Could not enable MQTT proxy because aiomqtt is not installed")
+            self._mqtt_proxy_enabled = False
+
+        if self._mqtt_proxy_enabled:
+            self._mqtt_client: aiomqtt.Client | None = None
+            self._mqtt_connected = False
+            self._mqtt_connection_task: asyncio.Task | None = None
+            self._mqtt_config: dict[str, str] | None = None
 
     def add_packet_app_listener(
         self,
@@ -315,7 +327,8 @@ class MeshInterface:
 
         self._add_background_task(get_config(), name="get-config")
 
-        self._add_background_task(self._init_mqtt_client(), name="init-mqtt-client")
+        if self._mqtt_proxy_enabled:
+            self._add_background_task(self._init_mqtt_client(), name="init-mqtt-client")
 
     async def stop(self) -> None:
         if not self._is_running.is_set():
