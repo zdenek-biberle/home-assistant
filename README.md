@@ -20,6 +20,7 @@ Supported Features:
  * Device triggers & actions for automations
  * Various other service actions (e.g. request metrics, trace route)
  * Bundled meshtastic web client for manual interaction with gateway
+ * MQTT client proxy support (forwards messages from radio to MQTT broker)
 
 For more details, see check the [documentation](#documentation).
 

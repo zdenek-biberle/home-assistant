@@ -5,6 +5,7 @@ import enum
 import functools
 import itertools
 import random
+import ssl
 from collections import defaultdict, deque
 from collections.abc import AsyncIterator, Awaitable, Callable, Mapping, MutableMapping
 from dataclasses import dataclass
@@ -16,7 +17,9 @@ from typing import (
     Self,
 )
 
+import aiomqtt
 import google
+from aiomqtt import MqttError
 from google.protobuf.message import Message
 
 from .connection import (
@@ -119,6 +122,7 @@ class MeshInterface:
         self._logger = LOGGER.getChild(self.__class__.__name__)
         self._connection = connection
         self._is_running = asyncio.Event()
+        self._is_stopped = asyncio.Event()
 
         self.debug_out = debug_out
         self.no_nodes = no_nodes
@@ -154,6 +158,12 @@ class MeshInterface:
             defaultdict(list)
         )
         self._previous_reconnects = deque(maxlen=10)
+
+        # MQTT client for persistent connection
+        self._mqtt_client = None
+        self._mqtt_connected = False
+        self._mqtt_connection_task = None
+        self._mqtt_config = None
 
     def add_packet_app_listener(
         self,
@@ -292,6 +302,7 @@ class MeshInterface:
     async def start(self) -> None:
         await self._connection.connect()
         self._is_running.set()
+        self._is_stopped.clear()
 
         self._processing_tasks.clear()
         self._processing_tasks.add(asyncio.create_task(self._heartbeat_loop(), name="heartbeat"))
@@ -302,7 +313,9 @@ class MeshInterface:
         async def get_config() -> None:
             await self._start_config()
 
-        self._add_background_task(get_config(), name="get_config")
+        self._add_background_task(get_config(), name="get-config")
+
+        self._add_background_task(self._init_mqtt_client(), name="init-mqtt-client")
 
     async def stop(self) -> None:
         if not self._is_running.is_set():
@@ -310,10 +323,15 @@ class MeshInterface:
 
         self._is_running.clear()
         self._connected_node_ready.clear()
+        self._is_stopped.set()
 
         await self._close_packet_streams()
         await self._cancel_processing_tasks()
         await self._cancel_background_tasks()
+
+        # MQTT client will be closed automatically when the context manager exits
+        self._mqtt_client = None
+        self._mqtt_connected = False
 
         with contextlib.suppress(Exception):
             await self._connection.send_disconnect()
@@ -360,6 +378,120 @@ class MeshInterface:
         await self._connected_node_ready.wait()
         return self._connected_node_ready.is_set()
 
+    async def _init_mqtt_client(self) -> None:
+        """Initialize the MQTT client if MQTT is enabled in the module config."""
+        if not await self.connected_node_ready():
+            self._logger.debug("Node not ready, not initializing MQTT client")
+            return
+
+        mqtt_config = self._connected_node_module_config.mqtt
+        if not mqtt_config.enabled:
+            self._logger.debug("MQTT not enabled in module config, not initializing client")
+            return
+
+        # Get MQTT configuration
+        broker = mqtt_config.address or "mqtt.meshtastic.org"
+        username = mqtt_config.username
+        password = mqtt_config.password
+        use_tls = mqtt_config.tls_enabled
+
+        # Set up SSL context if TLS is enabled
+        ssl_context = ssl.create_default_context()
+
+        # Parse broker address
+        hostname = broker.split(":", 1)[0]
+        port = int(broker.split(":", 1)[1]) if ":" in broker else 1883
+
+        # Get node ID for client identifier
+        node_id = self._connected_node_info.my_node_num
+        client_id = f"!{node_id:08x}"
+
+        self._logger.info("Initializing MQTT client")
+
+        # Create MQTT client configuration
+        self._mqtt_config = {
+            "hostname": hostname,
+            "port": port,
+            "username": username or None,
+            "password": password or None,
+            "tls_context": ssl_context if use_tls else None,
+            "identifier": client_id,
+        }
+
+        # Start connection task
+        self._mqtt_connection_task = self._add_background_task(self._maintain_mqtt_connection(), name="mqtt-connection")
+
+    async def _maintain_mqtt_connection(self) -> None:
+        """Maintains the MQTT connection and handles reconnections."""
+        while self.is_running:
+            try:
+                self._logger.debug("Connecting to MQTT broker")
+
+                self._mqtt_client = aiomqtt.Client(**self._mqtt_config)
+
+                # When the context manager exits, the connection is closed
+                async with self._mqtt_client:
+                    self._mqtt_connected = True
+                    self._logger.info("Connected to MQTT broker")
+
+                    # Wait until the interface is stopped
+                    await self._is_stopped.wait()
+
+                # Interface stopped, don't reconnect
+                break
+            except MqttError:
+                self._logger.exception("MQTT connection error")
+            finally:
+                self._mqtt_connected = False
+                self._logger.debug("MQTT connection closed")
+
+            # Wait before attempting to reconnect
+            self._logger.info("Reconnecting MQTT in 5 seconds")
+            try:
+                await asyncio.sleep(5)
+            except asyncio.CancelledError:
+                break
+
+    async def _handle_mqtt_client_proxy_message(self, message: mesh_pb2.MqttClientProxyMessage) -> None:
+        """
+        Handle MQTT client proxy messages from the radio.
+
+        This receives MqttClientProxyMessage messages from the radio and forwards them to the
+        configured MQTT broker.
+        """
+        if (
+            not hasattr(self._connected_node_module_config, "mqtt")
+            or not self._connected_node_module_config.mqtt.enabled
+        ):
+            self._logger.debug("MQTT not enabled or module config not yet available, ignoring message")
+            return
+
+        if not self._mqtt_connected or self._mqtt_client is None:
+            self._logger.debug("MQTT client not connected, message will be queued for later delivery")
+            return
+
+        self._logger.debug("Publishing MQTT message")
+
+        try:
+            if message.HasField("data"):
+                await self._mqtt_client.publish(
+                    message.topic,
+                    payload=message.data,
+                    retain=message.retained,
+                    qos=1,
+                )
+            elif message.HasField("text"):
+                await self._mqtt_client.publish(
+                    message.topic,
+                    payload=message.text.encode("utf-8"),
+                    retain=message.retained,
+                    qos=1,
+                )
+            else:
+                self._logger.debug("No payload in MQTT message, ignoring")
+        except Exception:
+            self._logger.exception("Error publishing MQTT message")
+
     @process_while_running
     async def _heartbeat_loop(self) -> None:
         while True:
@@ -404,6 +536,8 @@ class MeshInterface:
             self._process_connected_node_config(packet.config)
         elif packet.HasField("moduleConfig"):
             self._process_connected_node_module_config(packet.moduleConfig)
+        elif packet.HasField("mqttClientProxyMessage"):
+            await self._handle_mqtt_client_proxy_message(packet.mqttClientProxyMessage)
 
     def _process_connected_node_config(self, config: config_pb2.Config) -> None:
         if config.HasField("device"):
