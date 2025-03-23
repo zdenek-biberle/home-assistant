@@ -398,7 +398,7 @@ class MeshInterface:
             return
 
         mqtt_config = self._connected_node_module_config.mqtt
-        if not mqtt_config.enabled:
+        if not mqtt_config.enabled or not mqtt_config.proxy_to_client_enabled:
             self._logger.debug("MQTT not enabled in module config, not initializing client")
             return
 
@@ -475,6 +475,7 @@ class MeshInterface:
         if (
             not hasattr(self._connected_node_module_config, "mqtt")
             or not self._connected_node_module_config.mqtt.enabled
+            or not self._connected_node_module_config.mqtt.proxy_to_client_enabled
         ):
             self._logger.debug("MQTT not enabled or module config not yet available, ignoring message")
             return
