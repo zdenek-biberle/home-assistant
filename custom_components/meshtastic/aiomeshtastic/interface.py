@@ -445,21 +445,21 @@ class MeshInterface:
                 # When the context manager exits, the connection is closed
                 async with self._mqtt_client:
                     self._mqtt_connected = True
-                    self._logger.info("Connected to MQTT broker")
+                    self._logger.debug("Connected to MQTT broker")
 
                     # Wait until the interface is stopped
                     await self._is_stopped.wait()
 
                 # Interface stopped, don't reconnect
                 break
-            except MqttError:
-                self._logger.exception("MQTT connection error")
+            except MqttError as e:
+                self._logger.warning("Meshtastic MQTT proxy connection error: %s", e)
             finally:
                 self._mqtt_connected = False
                 self._logger.debug("MQTT connection closed")
 
             # Wait before attempting to reconnect
-            self._logger.info("Reconnecting MQTT in 5 seconds")
+            self._logger.debug("Reconnecting MQTT in 5 seconds")
             try:
                 await asyncio.sleep(5)
             except asyncio.CancelledError:
@@ -477,11 +477,10 @@ class MeshInterface:
             or not self._connected_node_module_config.mqtt.enabled
             or not self._connected_node_module_config.mqtt.proxy_to_client_enabled
         ):
-            self._logger.debug("MQTT not enabled or module config not yet available, ignoring message")
             return
 
         if not self._mqtt_connected or self._mqtt_client is None:
-            self._logger.debug("MQTT client not connected, message will be queued for later delivery")
+            self._logger.debug("MQTT client not yet connected")
             return
 
         self._logger.debug("Publishing MQTT message")
