@@ -6,9 +6,15 @@ body:
 - type: markdown
   attributes:
     value: Before you open a new issue, search through the existing issues to see if others have had the same problem.
+- type: input
+  attributes:
+    label: "Meshtastic Firmware Version"
+    description: "Please provide the meshtastic firmware version of the gateway node you are using"
+  validations:
+    required: true
 - type: textarea
   attributes:
-    label: "System Health details"
+    label: "Home Assistant System Health details"
     description: "Paste the data from the System Health card in Home Assistant (https://www.home-assistant.io/more-info/system-health#github-issues)"
   validations:
     required: true
@@ -43,7 +49,7 @@ body:
     required: true
 - type: textarea
   attributes:
-    label: "Debug logs"
+    label: "Home Assistant Debug logs"
     description: "To enable debug logs check this https://www.home-assistant.io/integrations/logger/, this **needs** to include _everything_ from startup of Home Assistant to the point where you encounter the issue."
     render: text
   validations:
@@ -51,5 +57,10 @@ body:
 
 - type: textarea
   attributes:
-    label: "Diagnostics dump"
+    label: "Home Assistant Diagnostics dump"
     description: "Drag the diagnostics dump file here. (see https://www.home-assistant.io/integrations/diagnostics/ for info)"
+
+- type: textarea
+  attributes:
+    label: "Meshtastic Node Debug logs"
+    description: "If you have the possibility, please provide the serial output of your meshtastic node"
