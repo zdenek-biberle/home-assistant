@@ -2,7 +2,7 @@
 Custom integration to integrate Meshtastic with Home Assistant.
 
 For more details about this integration, please refer to
-https://github.com/broglep/homeassistant-meshtastic
+https://github.com/meshtastic/home-assistant
 """
 
 from __future__ import annotations
