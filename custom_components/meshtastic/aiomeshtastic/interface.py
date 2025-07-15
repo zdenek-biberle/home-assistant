@@ -1,3 +1,8 @@
+# SPDX-FileCopyrightText: 2024-2025 Pascal Brogle @broglep
+# SPDX-FileCopyrightText: 2025 Hendrik @novag
+#
+# SPDX-License-Identifier: MIT
+
 import asyncio
 import contextlib
 import datetime
@@ -12,7 +17,6 @@ from pathlib import Path
 from types import MappingProxyType, TracebackType
 from typing import (
     Any,
-    Optional,
     Self,
 )
 
@@ -1054,7 +1058,7 @@ class MeshInterface:
         *,
         want_ack: bool = False,
         channel_index: int | None = None,
-        priority: Optional[MeshPacket.Priority] = None,  # noqa: UP007
+        priority: MeshPacket.Priority | None = None,
     ) -> None:
         if isinstance(destination, MeshNode):
             to_node = destination.id

@@ -1,3 +1,10 @@
+<!--
+SPDX-FileCopyrightText: 2024-2025 Pascal Brogle @broglep
+SPDX-FileCopyrightText: 2025 Ylian Saint-Hilaire @ylianst
+
+SPDX-License-Identifier: MIT
+-->
+
 # Home-Assistant Meshtastic Integration
 
 [![GitHub Release][releases-shield]][releases]
