@@ -28,7 +28,10 @@ from .api import (
 from .const import (
     DOMAIN,
     EVENT_MESHTASTIC_DOMAIN_EVENT,
+    EVENT_MESHTASTIC_DOMAIN_EVENT_DATA_ATTR_EMOJI,
     EVENT_MESHTASTIC_DOMAIN_EVENT_DATA_ATTR_MESSAGE,
+    EVENT_MESHTASTIC_DOMAIN_EVENT_DATA_ATTR_PACKET_ID,
+    EVENT_MESHTASTIC_DOMAIN_EVENT_DATA_ATTR_REPLY_ID,
     EVENT_MESHTASTIC_DOMAIN_MESSAGE_LOG,
     EVENT_MESHTASTIC_MESSAGE_LOG_EVENT_DATA_ATTR_FROM_NAME,
     EVENT_MESHTASTIC_MESSAGE_LOG_EVENT_DATA_ATTR_MESSAGE,
@@ -112,6 +115,19 @@ async def async_setup_message_logger(hass: HomeAssistant, entry: MeshtasticConfi
         }
         hass.bus.async_fire(event_type=EVENT_MESHTASTIC_DOMAIN_MESSAGE_LOG, event_data=message_log_event_data)
 
+    def _build_domain_event_data(
+        event_type: MeshtasticDomainEventType, device_id: str, data: Mapping[str, Any]
+    ) -> MeshtasticDomainEventData:
+        return {
+            CONF_TYPE: event_type,
+            CONF_DEVICE_ID: device_id,
+            CONF_ENTITY_ID: None,
+            EVENT_MESHTASTIC_DOMAIN_EVENT_DATA_ATTR_MESSAGE: data["message"],
+            EVENT_MESHTASTIC_DOMAIN_EVENT_DATA_ATTR_PACKET_ID: data["packet_id"],
+            EVENT_MESHTASTIC_DOMAIN_EVENT_DATA_ATTR_REPLY_ID: data["reply_id"],
+            EVENT_MESHTASTIC_DOMAIN_EVENT_DATA_ATTR_EMOJI: data["emoji"],
+        }
+
     async def _on_text_message(event: Event) -> None:
         event_data = deepcopy(event.data)
         config_entry_id = event_data.pop(ATTR_EVENT_MESHTASTIC_API_CONFIG_ENTRY_ID, None)
@@ -134,11 +150,7 @@ async def async_setup_message_logger(hass: HomeAssistant, entry: MeshtasticConfi
         message = data["message"]
 
         if from_device:
-            domain_event_data: MeshtasticDomainEventData = {
-                CONF_DEVICE_ID: from_device.id,
-                CONF_TYPE: MeshtasticDomainEventType.MESSAGE_SENT,
-                EVENT_MESHTASTIC_DOMAIN_EVENT_DATA_ATTR_MESSAGE: message,
-            }
+            domain_event_data = _build_domain_event_data(MeshtasticDomainEventType.MESSAGE_SENT, from_device.id, data)
             if to_channel_entity_id:
                 domain_event_data[CONF_ENTITY_ID] = to_channel_entity_id
             if to_dm_entity_id:
@@ -146,12 +158,9 @@ async def async_setup_message_logger(hass: HomeAssistant, entry: MeshtasticConfi
             hass.bus.async_fire(event_type=EVENT_MESHTASTIC_DOMAIN_EVENT, event_data=domain_event_data)
 
         if to_device:
-            domain_event_data: MeshtasticDomainEventData = {
-                CONF_DEVICE_ID: to_device.id,
-                CONF_TYPE: MeshtasticDomainEventType.MESSAGE_RECEIVED,
-                EVENT_MESHTASTIC_DOMAIN_EVENT_DATA_ATTR_MESSAGE: message,
-            }
-
+            domain_event_data: MeshtasticDomainEventData = _build_domain_event_data(
+                MeshtasticDomainEventType.MESSAGE_RECEIVED, to_device.id, data
+            )
             if to_channel_entity_id:
                 domain_event_data[CONF_ENTITY_ID] = to_channel_entity_id
             if to_dm_entity_id:
