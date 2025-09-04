@@ -34,6 +34,14 @@ send_text:
       required: true
       selector:
         boolean: {}
+    reply_id:
+      required: false
+      selector:
+        template:
+    emoji:
+      required: true
+      selector:
+        boolean:
 
 
 send_direct_message:
@@ -53,6 +61,14 @@ send_direct_message:
       default: true
       selector:
         boolean: {}
+    reply_id:
+      required: false
+      selector:
+        template:
+    emoji:
+      required: true
+      selector:
+        boolean:
 
 broadcast_channel_message:
   fields:
@@ -73,6 +89,14 @@ broadcast_channel_message:
       default: true
       selector:
         boolean: {}
+    reply_id:
+      required: false
+      selector:
+        template:
+    emoji:
+      required: true
+      selector:
+        boolean:
 
 
 request_telemetry:

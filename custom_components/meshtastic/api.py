@@ -208,13 +208,15 @@ class MeshtasticApiClient:
 
         return transformed
 
-    async def send_text(
+    async def send_text(  # noqa: PLR0913
         self,
         text: str,
         destination_id: int | str = MeshInterface.BROADCAST_ADDR,
         *,
         want_ack: bool = False,
         channel_index: int | None = None,
+        reply_id: int = 0,
+        emoji: int = 0,
     ) -> bool:
         try:
             await asyncio.wait_for(
@@ -223,6 +225,8 @@ class MeshtasticApiClient:
                     destination=destination_id,
                     want_ack=want_ack,
                     channel_index=channel_index,
+                    reply_id=reply_id,
+                    emoji=emoji,
                 ),
                 timeout=30,
             )
@@ -270,13 +274,31 @@ class MeshtasticApiClient:
             to_channel = None
             to_node = packet.to_id
 
+        data = packet.data
+        if data is None:
+            self._logger.debug("No decoded data in text message packet, ignoring")
+            return
+
+        payload = packet.app_payload
+        if payload is None:
+            self._logger.debug("No payload in text message packet, ignoring")
+            return
+
+        mesh_packet = packet.mesh_packet
+        if mesh_packet is None:
+            self._logger.debug("No mesh packet in text message packet, ignoring")
+            return
+
         event_data = self._build_event_data(
             node.id,
             {
                 "from": packet.from_id,
                 "to": {"node": to_node, "channel": to_channel},
                 "gateway": self.get_own_node()["num"],
-                "message": packet.app_payload,
+                "message": payload,
+                "packet_id": mesh_packet.id,
+                "reply_id": data.reply_id,
+                "emoji": data.emoji,
             },
         )
 

@@ -65,6 +65,8 @@ ATTR_SERVICE_DATA_TO = "to"
 ATTR_SERVICE_DATA_CHANNEL = "channel"
 ATTR_SERVICE_DATA_FROM = "from"
 ATTR_SERVICE_DATA_ACK = "ack"
+ATTR_SERVICE_DATA_REPLY_ID = "reply_id"
+ATTR_SERVICE_DATA_EMOJI = "emoji"
 
 
 ATTR_SERVICE_SEND_TEXT_DATA_TEXT = "text"
@@ -90,12 +92,19 @@ class MeshtasticDomainEventType(enum.StrEnum):
 
 
 EVENT_MESHTASTIC_DOMAIN_EVENT_DATA_ATTR_MESSAGE: Final = "message"
+EVENT_MESHTASTIC_DOMAIN_EVENT_DATA_ATTR_PACKET_ID: Final = "packet_id"
+EVENT_MESHTASTIC_DOMAIN_EVENT_DATA_ATTR_REPLY_ID: Final = "reply_id"
+EVENT_MESHTASTIC_DOMAIN_EVENT_DATA_ATTR_EMOJI: Final = "emoji"
 
 
 class MeshtasticDomainEventData(TypedDict):
-    CONF_DEVICE_ID: str
-    CONF_ENTITY_ID: str | None
-    EVENT_MESHTASTIC_DOMAIN_EVENT_DATA_ATTR_MESSAGE: str
+    type: MeshtasticDomainEventType
+    device_id: str
+    entity_id: str | None
+    message: str
+    packet_id: int
+    reply_id: int
+    emoji: int
 
 
 # Primary user facing event
@@ -108,12 +117,11 @@ EVENT_MESHTASTIC_MESSAGE_LOG_EVENT_DATA_ATTR_MESSAGE: Final = "message"
 
 
 class MeshtasticDomainMessageLogEventData(TypedDict):
-    CONF_DEVICE_ID: str
-    CONF_ENTITY_ID: str
-    EVENT_MESHTASTIC_MESSAGE_LOG_EVENT_DATA_ATTR_MESSAGE: str
-    EVENT_MESHTASTIC_MESSAGE_LOG_EVENT_DATA_ATTR_FROM_NAME: str
-    EVENT_MESHTASTIC_MESSAGE_LOG_EVENT_DATA_ATTR_PKI: bool
-    EVENT_MESHTASTIC_DOMAIN_EVENT_DATA_ATTR_MESSAGE: str
+    device_id: str
+    entity_id: str
+    message: str
+    from_name: str
+    pki: bool
 
 
 # Event used for logbook

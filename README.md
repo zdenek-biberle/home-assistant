@@ -150,6 +150,36 @@ it is still busy with receiving / sending other mesh messages.
 </details>
 
 <details>
+<summary>React to every message in a channel with a 👋 emoji</summary>
+
+```yaml
+- id: '1757011496522'
+  alias: React to every message in a channel with a 👋 emoji
+  description: ''
+  triggers:
+    - domain: meshtastic
+      device_id: f1837e8872a6de5d76ed0d6abd5462e6
+      type: channel_message.received
+      entity_id: meshtastic.gateway_brig_channel_foo
+      trigger: device
+  conditions:
+    - condition: template
+      value_template: '{{ trigger.event.data.emoji == 0 }}'
+      alias: Do not react to reactions
+  actions:
+    - action: meshtastic.broadcast_channel_message
+      metadata: {}
+      data:
+        ack: false
+        emoji: true
+        channel: meshtastic.gateway_brig_channel_foo
+        message: 👋
+        reply_id: '{{ trigger.event.data.packet_id }}'
+  mode: single
+```
+</details>
+
+<details>
 <summary>Advanced: Handling incoming text messages from any node without notification platform and its entities</summary>
 
 ```yaml
@@ -219,6 +249,9 @@ trigger:
           channel: 0
         gateway: 862525748
         message: Sample Message
+        packet_id: 2770141804
+        reply_id: 0
+        emoji: 0
 ```
 
 From contains the node id of the sender of the message, to will have the node id of the gateway for direct messages, or a gateway channel id if the message is directed at the channel. 
